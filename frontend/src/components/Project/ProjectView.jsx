@@ -1,42 +1,47 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import useProjectStore from '../../store/projectStore';
 import { generationApi } from '../../api/generation';
 import { refinementApi } from '../../api/refinement';
+import { showToast } from '../../utils/toast';
 
 const ProjectView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentProject, loading, fetchProject } = useProjectStore();
-
+  
+  // Generation states
   const [generating, setGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({});
   const [selectedSection, setSelectedSection] = useState(null);
-  const [regeneratingSection, setRegeneratingSection] = useState(null);
   const [error, setError] = useState('');
-
+  
   // Refinement states
   const [refining, setRefining] = useState(false);
   const [refinementPrompt, setRefinementPrompt] = useState('');
   const [showRefinementInput, setShowRefinementInput] = useState(false);
   const [refinementHistory, setRefinementHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
- 
+  
   // Feedback states
   const [feedback, setFeedback] = useState({});
   const [comment, setComment] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
 
+  // Load project on mount
   useEffect(() => {
     fetchProject(id);
   }, [id, fetchProject]);
 
+  // Set first section as selected
   useEffect(() => {
     if (currentProject?.sections?.length > 0 && !selectedSection) {
       setSelectedSection(currentProject.sections[0].id);
     }
   }, [currentProject, selectedSection]);
 
+  // Load refinements and feedback when section changes
   useEffect(() => {
     if (selectedSection) {
       loadRefinements();
@@ -75,7 +80,10 @@ const ProjectView = () => {
     setError('');
     setGenerationProgress({});
 
+    const toastId = showToast.loading('Generating content for all sections...');
+
     try {
+      // Show progress indicators
       currentProject.sections.forEach((section, index) => {
         setTimeout(() => {
           setGenerationProgress(prev => ({
@@ -85,18 +93,27 @@ const ProjectView = () => {
         }, index * 500);
       });
 
+      // Call API to generate content
       const updatedProject = await generationApi.generateProject(id);
-
+      
+      // Mark all as complete
       const completedProgress = {};
       updatedProject.sections.forEach(section => {
         completedProgress[section.id] = 'complete';
       });
       setGenerationProgress(completedProgress);
 
+      // Refresh project data
       await fetchProject(id);
-
+      
+      toast.dismiss(toastId);
+      showToast.success('Content generated successfully! 🎉');
+      
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to generate content');
+      const errorMsg = err.response?.data?.detail || 'Failed to generate content';
+      setError(errorMsg);
+      toast.dismiss(toastId);
+      showToast.error(errorMsg);
       setGenerationProgress({});
     } finally {
       setGenerating(false);
@@ -106,11 +123,14 @@ const ProjectView = () => {
   const handleRefine = async () => {
     if (!refinementPrompt.trim()) {
       setError('Please enter a refinement prompt');
+      showToast.error('Please enter a refinement prompt');
       return;
     }
 
     setRefining(true);
     setError('');
+
+    const toastId = showToast.loading('Refining content...');
 
     try {
       await refinementApi.refineSection(selectedSection, refinementPrompt);
@@ -118,8 +138,14 @@ const ProjectView = () => {
       await loadRefinements();
       setRefinementPrompt('');
       setShowRefinementInput(false);
+      
+      toast.dismiss(toastId);
+      showToast.success('Section refined successfully! ✨');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to refine section');
+      const errorMsg = err.response?.data?.detail || 'Failed to refine section';
+      setError(errorMsg);
+      toast.dismiss(toastId);
+      showToast.error(errorMsg);
     } finally {
       setRefining(false);
     }
@@ -133,13 +159,19 @@ const ProjectView = () => {
         [selectedSection]: { type, comment: null }
       });
       await loadFeedback();
+      
+      const emoji = type === 'like' ? '👍' : '👎';
+      showToast.success(`Feedback saved ${emoji}`);
     } catch (err) {
-      setError('Failed to save feedback');
+      showToast.error('Failed to save feedback');
     }
   };
 
   const handleAddComment = async () => {
-    if (!comment.trim()) return;
+    if (!comment.trim()) {
+      showToast.error('Comment cannot be empty');
+      return;
+    }
 
     try {
       await refinementApi.addFeedback(selectedSection, null, comment);
@@ -153,8 +185,9 @@ const ProjectView = () => {
       setComment('');
       setShowCommentInput(false);
       await loadFeedback();
+      showToast.success('Comment added successfully 💬');
     } catch (err) {
-      setError('Failed to save comment');
+      showToast.error('Failed to save comment');
     }
   };
 
@@ -166,6 +199,7 @@ const ProjectView = () => {
   const selectedSectionData = getSelectedSectionData();
   const sectionFeedback = feedback[selectedSection];
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -177,6 +211,7 @@ const ProjectView = () => {
     );
   }
 
+  // Not found state
   if (!currentProject) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -212,7 +247,7 @@ const ProjectView = () => {
               <button
                 onClick={handleGenerateContent}
                 disabled={generating}
-                className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
               >
                 {generating ? (
                   <>
@@ -226,15 +261,20 @@ const ProjectView = () => {
                   </>
                 )}
               </button>
-            ) : null}
+            ) : (
+              <div className="flex items-center space-x-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                <span>✓</span>
+                <span className="font-medium">Content Generated</span>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{currentProject.title}</h1>
-              <p className="mt-1 text-sm text-gray-600">{currentProject.topic}</p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">{currentProject.title}</h1>
+              <p className="text-sm text-gray-600">{currentProject.topic}</p>
             </div>
-            <span className="px-4 py-2 text-sm font-semibold text-primary-700 bg-primary-50 rounded-full">
+            <span className="px-4 py-2 text-sm font-semibold text-primary-700 bg-primary-50 rounded-full self-start">
               {currentProject.document_type.toUpperCase()}
             </span>
           </div>
@@ -246,7 +286,12 @@ const ProjectView = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex justify-between items-center">
             <span>{error}</span>
-            <button onClick={() => setError('')} className="text-red-900 font-bold">✕</button>
+            <button 
+              onClick={() => setError('')} 
+              className="text-red-900 font-bold hover:text-red-700 transition duration-200"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
@@ -256,7 +301,7 @@ const ProjectView = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sticky top-24">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:sticky lg:top-24">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                 {currentProject.document_type === 'docx' ? 'Sections' : 'Slides'} ({currentProject.sections.length})
               </h3>
@@ -307,7 +352,7 @@ const ProjectView = () => {
                 </p>
                 <button
                   onClick={handleGenerateContent}
-                  className="inline-flex items-center space-x-2 px-8 py-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 text-lg"
+                  className="inline-flex items-center space-x-2 px-8 py-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 text-lg shadow-md hover:shadow-lg"
                 >
                   <span>✨</span>
                   <span>Generate Content</span>
@@ -326,7 +371,7 @@ const ProjectView = () => {
                             {currentProject.document_type === 'docx' ? 'Section' : 'Slide'} {selectedSectionData.order + 1}
                           </span>
                           {selectedSectionData.content && (
-                            <span className="flex items-center space-x-1 text-xs text-green-600">
+                            <span className="flex items-center space-x-1 text-xs text-green-600 bg-green-50 px-3 py-1 rounded-full">
                               <span>✓</span>
                               <span>Generated</span>
                             </span>
@@ -340,13 +385,13 @@ const ProjectView = () => {
 
                     {/* Feedback Buttons */}
                     {selectedSectionData.content && (
-                      <div className="flex items-center space-x-3">
+                      <div className="flex flex-wrap items-center gap-3">
                         <button
                           onClick={() => handleFeedback('like')}
                           className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition duration-200 ${
                             sectionFeedback?.type === 'like'
                               ? 'bg-green-100 text-green-700 border-2 border-green-500'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
                           }`}
                         >
                           <span className="text-lg">👍</span>
@@ -358,7 +403,7 @@ const ProjectView = () => {
                           className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition duration-200 ${
                             sectionFeedback?.type === 'dislike'
                               ? 'bg-red-100 text-red-700 border-2 border-red-500'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
                           }`}
                         >
                           <span className="text-lg">👎</span>
@@ -367,7 +412,7 @@ const ProjectView = () => {
 
                         <button
                           onClick={() => setShowCommentInput(!showCommentInput)}
-                          className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition duration-200"
+                          className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition duration-200 border-2 border-transparent"
                         >
                           <span className="text-lg">💬</span>
                           <span className="text-sm font-medium">Comment</span>
@@ -375,7 +420,7 @@ const ProjectView = () => {
 
                         <button
                           onClick={() => setShowHistory(!showHistory)}
-                          className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition duration-200 ml-auto"
+                          className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition duration-200 ml-auto border-2 border-transparent"
                         >
                           <span className="text-lg">📜</span>
                           <span className="text-sm font-medium">History ({refinementHistory.length})</span>
@@ -390,7 +435,7 @@ const ProjectView = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Add Comment
                       </label>
-                      <div className="flex space-x-3">
+                      <div className="flex flex-col sm:flex-row gap-3">
                         <textarea
                           value={comment}
                           onChange={(e) => setComment(e.target.value)}
@@ -398,13 +443,24 @@ const ProjectView = () => {
                           rows={3}
                           className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         />
-                        <button
-                          onClick={handleAddComment}
-                          disabled={!comment.trim()}
-                          className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50"
-                        >
-                          Save
-                        </button>
+                        <div className="flex sm:flex-col gap-2">
+                          <button
+                            onClick={handleAddComment}
+                            disabled={!comment.trim()}
+                            className="flex-1 sm:flex-none px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowCommentInput(false);
+                              setComment('');
+                            }}
+                            className="flex-1 sm:flex-none px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition duration-200"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -414,16 +470,17 @@ const ProjectView = () => {
                     {generationProgress[selectedSectionData.id] === 'generating' ? (
                       <div className="flex flex-col items-center justify-center py-20">
                         <div className="spinner mb-4"></div>
-                        <p className="text-gray-600">Generating content...</p>
+                        <p className="text-gray-600">Generating content for this {currentProject.document_type === 'docx' ? 'section' : 'slide'}...</p>
                       </div>
                     ) : selectedSectionData.content ? (
-                      <div className="prose max-w-none">
+                      <div className="prose prose-sm sm:prose lg:prose-lg max-w-none">
                         <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
                           {selectedSectionData.content}
                         </div>
                       </div>
                     ) : (
                       <div className="text-center py-20 text-gray-400">
+                        <div className="text-4xl mb-3">📝</div>
                         <p>No content generated yet</p>
                       </div>
                     )}
@@ -435,7 +492,7 @@ const ProjectView = () => {
                       {!showRefinementInput ? (
                         <button
                           onClick={() => setShowRefinementInput(true)}
-                          className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200"
+                          className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 shadow-sm hover:shadow-md"
                         >
                           <span>🔄</span>
                           <span>Refine This Section</span>
@@ -452,11 +509,11 @@ const ProjectView = () => {
                             rows={3}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           />
-                          <div className="flex space-x-3">
+                          <div className="flex flex-col sm:flex-row gap-3">
                             <button
                               onClick={handleRefine}
                               disabled={refining || !refinementPrompt.trim()}
-                              className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50"
+                              className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {refining ? (
                                 <>
@@ -475,7 +532,8 @@ const ProjectView = () => {
                                 setShowRefinementInput(false);
                                 setRefinementPrompt('');
                               }}
-                              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition duration-200"
+                              disabled={refining}
+                              className="flex-1 sm:flex-none px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition duration-200 disabled:opacity-50"
                             >
                               Cancel
                             </button>
@@ -489,30 +547,38 @@ const ProjectView = () => {
                 {/* Refinement History */}
                 {showHistory && refinementHistory.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      Refinement History
-                    </h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Refinement History
+                      </h3>
+                      <button
+                        onClick={() => setShowHistory(false)}
+                        className="text-gray-400 hover:text-gray-600 transition duration-200"
+                      >
+                        ✕
+                      </button>
+                    </div>
                     <div className="space-y-4">
                       {refinementHistory.map((refinement, index) => (
                         <div key={refinement.id} className="border-l-4 border-primary-500 pl-4 py-2">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-semibold text-gray-500">
+                            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">
                               Refinement #{refinementHistory.length - index}
                             </span>
                             <span className="text-xs text-gray-400">
                               {new Date(refinement.created_at).toLocaleString()}
                             </span>
                           </div>
-                          <p className="text-sm font-medium text-gray-700 mb-2">
-                            Prompt: "{refinement.prompt}"
+                          <p className="text-sm font-medium text-gray-700 mb-2 bg-blue-50 p-3 rounded">
+                            <span className="text-primary-600">Prompt:</span> "{refinement.prompt}"
                           </p>
                           <details className="text-sm text-gray-600">
-                            <summary className="cursor-pointer text-primary-600 hover:text-primary-700">
+                            <summary className="cursor-pointer text-primary-600 hover:text-primary-700 font-medium">
                               View changes
                             </summary>
-                            <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-                              <p className="text-xs text-gray-500 mb-1">Before:</p>
-                              <p className="line-clamp-3">{refinement.previous_content}</p>
+                            <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                              <p className="text-xs text-gray-500 mb-1 font-semibold">Previous content:</p>
+                              <p className="line-clamp-3 text-sm">{refinement.previous_content}</p>
                             </div>
                           </details>
                         </div>

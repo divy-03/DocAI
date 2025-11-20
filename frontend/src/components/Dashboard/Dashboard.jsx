@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import useProjectStore from '../../store/projectStore';
+import { showToast } from '../../utils/toast';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -30,9 +31,10 @@ const Dashboard = () => {
     if (deleteConfirm === projectId) {
       try {
         await deleteProject(projectId);
+        showToast.success('Project deleted successfully');
         setDeleteConfirm(null);
       } catch (error) {
-        alert('Failed to delete project');
+        showToast.error('Failed to delete project');
       }
     } else {
       setDeleteConfirm(projectId);

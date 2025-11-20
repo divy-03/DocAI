@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useProjectStore from '../../store/projectStore';
+import { generationApi } from '../../api/generation';
+import { showToast } from '../../utils/toast';
 
 const CreateProject = () => {
   const navigate = useNavigate();
@@ -15,16 +17,19 @@ const CreateProject = () => {
   });
   const [currentSection, setCurrentSection] = useState('');
   const [error, setError] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   const handleNext = () => {
     if (step === 1) {
       if (!formData.document_type) {
         setError('Please select a document type');
+        showToast.error('Please select a document type');
         return;
       }
     } else if (step === 2) {
       if (!formData.title.trim() || !formData.topic.trim()) {
         setError('Please fill in all fields');
+        showToast.error('Please fill in all fields');
         return;
       }
     }
@@ -37,9 +42,45 @@ const CreateProject = () => {
     setStep(step - 1);
   };
 
+  const handleAIOutline = async () => {
+    if (!formData.topic.trim()) {
+      setError('Please enter a topic first');
+      showToast.error('Please enter a topic first');
+      return;
+    }
+
+    setAiGenerating(true);
+    setError('');
+    
+    const toastId = showToast.loading('Generating AI outline...');
+    
+    try {
+      const result = await generationApi.generateOutline(
+        formData.topic,
+        formData.document_type,
+        5
+      );
+      
+      setFormData({
+        ...formData,
+        sections: result.sections
+      });
+      
+      showToast.success('AI outline generated successfully!');
+      toast.dismiss(toastId);
+    } catch (err) {
+      setError('Failed to generate outline. Please try again.');
+      showToast.error('Failed to generate outline');
+      toast.dismiss(toastId);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const handleAddSection = () => {
     if (!currentSection.trim()) {
       setError('Section title cannot be empty');
+      showToast.error('Section title cannot be empty');
       return;
     }
 
@@ -54,6 +95,7 @@ const CreateProject = () => {
     });
     setCurrentSection('');
     setError('');
+    showToast.success('Section added');
   };
 
   const handleRemoveSection = (index) => {
@@ -62,6 +104,7 @@ const CreateProject = () => {
       .map((section, i) => ({ ...section, order: i }));
     
     setFormData({ ...formData, sections: updatedSections });
+    showToast.success('Section removed');
   };
 
   const handleMoveSection = (index, direction) => {
@@ -79,45 +122,23 @@ const CreateProject = () => {
   const handleSubmit = async () => {
     if (formData.sections.length === 0) {
       setError('Please add at least one section');
+      showToast.error('Please add at least one section');
       return;
     }
 
     try {
       const project = await createProject(formData);
+      showToast.success('Project created successfully!');
       navigate(`/projects/${project.id}`);
     } catch (err) {
       setError('Failed to create project');
+      showToast.error('Failed to create project');
     }
   };
 
   const getSectionLabel = () => {
     return formData.document_type === 'docx' ? 'Section' : 'Slide';
   };
-
-
-const [aiGenerating, setAiGenerating] = useState(false);
-
-const handleAIOutline = async () => {
-  setAiGenerating(true);
-  setError('');
-  
-  try {
-    const result = await generationApi.generateOutline(
-      formData.topic,
-      formData.document_type,
-      5
-    );
-    
-    setFormData({
-      ...formData,
-      sections: result.sections
-    });
-  } catch (err) {
-    setError('Failed to generate outline. Please try again.');
-  } finally {
-    setAiGenerating(false);
-  }
-};
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -264,38 +285,42 @@ const handleAIOutline = async () => {
           )}
 
           {/* Step 3: Structure */}
-{step === 3 && (
-  <div>
-    <h2 className="text-2xl font-bold text-gray-900 mb-2">Define Structure</h2>
-    <p className="text-gray-600 mb-6">
-      Add {formData.document_type === 'docx' ? 'sections' : 'slides'} to your document
-    </p>
+          {step === 3 && (
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Define Structure</h2>
+              <p className="text-gray-600 mb-6">
+                Add {formData.document_type === 'docx' ? 'sections' : 'slides'} to your document
+              </p>
 
-    {/* AI Generate Outline Button */}
-    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <h4 className="text-sm font-semibold text-blue-900 mb-1">✨ AI Suggestion</h4>
-          <p className="text-xs text-blue-700">
-            Let AI suggest an outline based on your topic
-          </p>
-        </div>
-        <button
-          onClick={handleAIOutline}
-          disabled={aiGenerating || !formData.topic}
-          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-        >
-          {aiGenerating ? (
-            <div className="flex items-center space-x-2">
-              <div className="spinner w-4 h-4 border-2"></div>
-              <span>Generating...</span>
-            </div>
-          ) : (
-            'Generate Outline'
-          )}
-        </button>
-      </div>
-    </div>
+              {/* AI Generate Outline Button */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="text-lg">✨</span>
+                      <h4 className="text-sm font-semibold text-blue-900">AI Suggestion</h4>
+                    </div>
+                    <p className="text-xs text-blue-700">
+                      Let AI suggest a professional outline based on your topic
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleAIOutline}
+                    disabled={aiGenerating || !formData.topic}
+                    className="ml-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {aiGenerating ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="spinner w-4 h-4 border-2"></div>
+                        <span>Generating...</span>
+                      </div>
+                    ) : (
+                      'Generate Outline'
+                    )}
+                  </button>
+                </div>
+              </div>
+
               {/* Add Section Form */}
               <div className="flex space-x-3 mb-6">
                 <input
@@ -324,7 +349,7 @@ const handleAIOutline = async () => {
                     {formData.sections.map((section, index) => (
                       <div
                         key={index}
-                        className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-200"
+                        className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-primary-300 transition duration-200"
                       >
                         <div className="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-lg flex items-center justify-center font-semibold text-sm">
                           {index + 1}
@@ -335,6 +360,7 @@ const handleAIOutline = async () => {
                             onClick={() => handleMoveSection(index, 'up')}
                             disabled={index === 0}
                             className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition duration-200"
+                            title="Move up"
                           >
                             ↑
                           </button>
@@ -342,12 +368,14 @@ const handleAIOutline = async () => {
                             onClick={() => handleMoveSection(index, 'down')}
                             disabled={index === formData.sections.length - 1}
                             className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition duration-200"
+                            title="Move down"
                           >
                             ↓
                           </button>
                           <button
                             onClick={() => handleRemoveSection(index)}
                             className="w-8 h-8 flex items-center justify-center bg-white border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition duration-200"
+                            title="Remove"
                           >
                             ✕
                           </button>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
+import { showToast } from '../../utils/toast';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -20,9 +21,10 @@ const Login = () => {
     
     try {
       await login(formData.username, formData.password);
+      showToast.success('Login successful!');
       navigate('/dashboard');
     } catch (err) {
-      console.error('Login error:', err);
+      showToast.error(error || 'Login failed');
     }
   };
 

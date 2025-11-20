@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
+import { showToast } from '../../utils/toast';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -25,11 +26,13 @@ const Register = () => {
     
     if (formData.password !== formData.confirmPassword) {
       setFormError('Passwords do not match');
+      showToast.error('Passwords do not match');
       return;
     }
 
     if (formData.password.length < 6) {
       setFormError('Password must be at least 6 characters');
+      showToast.error('Password must be at least 6 characters');
       return;
     }
 
@@ -39,10 +42,12 @@ const Register = () => {
         username: formData.username,
         password: formData.password
       });
-      alert('Registration successful! Please login.');
+      showToast.success('Registration successful! Please login.');
       navigate('/login');
     } catch (err) {
-      setFormError(error || 'Registration failed');
+      const errorMsg = error || 'Registration failed';
+      setFormError(errorMsg);
+      showToast.error(errorMsg);
     }
   };
 
