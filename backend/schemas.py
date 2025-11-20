@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
-from models import DocumentType
+from models import DocumentType, FeedbackType
 
 # User Schemas
 class UserBase(BaseModel):
@@ -40,6 +40,49 @@ class SectionResponse(SectionBase):
     project_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+# Refinement Schemas
+class RefinementCreate(BaseModel):
+    prompt: str
+
+class RefinementResponse(BaseModel):
+    id: int
+    prompt: str
+    previous_content: str
+    new_content: str
+    section_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Feedback Schemas
+class FeedbackCreate(BaseModel):
+    feedback_type: Optional[FeedbackType] = None
+    comment: Optional[str] = None
+
+class FeedbackResponse(BaseModel):
+    id: int
+    feedback_type: Optional[FeedbackType] = None
+    comment: Optional[str] = None
+    section_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Section with Refinements and Feedback
+class SectionDetailResponse(SectionBase):
+    id: int
+    content: Optional[str] = None
+    project_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    refinements: List[RefinementResponse] = []
+    feedback: List[FeedbackResponse] = []
 
     class Config:
         from_attributes = True
