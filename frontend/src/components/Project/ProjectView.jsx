@@ -2,16 +2,30 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useProjectStore from '../../store/projectStore';
 import { generationApi } from '../../api/generation';
+import { refinementApi } from '../../api/refinement';
 
 const ProjectView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentProject, loading, fetchProject } = useProjectStore();
+
   const [generating, setGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({});
   const [selectedSection, setSelectedSection] = useState(null);
   const [regeneratingSection, setRegeneratingSection] = useState(null);
   const [error, setError] = useState('');
+
+  // Refinement states
+  const [refining, setRefining] = useState(false);
+  const [refinementPrompt, setRefinementPrompt] = useState('');
+  const [showRefinementInput, setShowRefinementInput] = useState(false);
+  const [refinementHistory, setRefinementHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+ 
+  // Feedback states
+  const [feedback, setFeedback] = useState({});
+  const [comment, setComment] = useState('');
+  const [showCommentInput, setShowCommentInput] = useState(false);
 
   useEffect(() => {
     fetchProject(id);
@@ -23,13 +37,45 @@ const ProjectView = () => {
     }
   }, [currentProject, selectedSection]);
 
+  useEffect(() => {
+    if (selectedSection) {
+      loadRefinements();
+      loadFeedback();
+    }
+  }, [selectedSection]);
+
+  const loadRefinements = async () => {
+    try {
+      const data = await refinementApi.getRefinements(selectedSection);
+      setRefinementHistory(data);
+    } catch (err) {
+      console.error('Failed to load refinements:', err);
+    }
+  };
+
+  const loadFeedback = async () => {
+    try {
+      const data = await refinementApi.getFeedback(selectedSection);
+      if (data.length > 0) {
+        const latestFeedback = data[0];
+        setFeedback({
+          [selectedSection]: {
+            type: latestFeedback.feedback_type,
+            comment: latestFeedback.comment
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load feedback:', err);
+    }
+  };
+
   const handleGenerateContent = async () => {
     setGenerating(true);
     setError('');
     setGenerationProgress({});
 
     try {
-      // Simulate progress for each section
       currentProject.sections.forEach((section, index) => {
         setTimeout(() => {
           setGenerationProgress(prev => ({
@@ -39,19 +85,16 @@ const ProjectView = () => {
         }, index * 500);
       });
 
-      // Call API to generate content
       const updatedProject = await generationApi.generateProject(id);
-      
-      // Mark all as complete
+
       const completedProgress = {};
       updatedProject.sections.forEach(section => {
         completedProgress[section.id] = 'complete';
       });
       setGenerationProgress(completedProgress);
 
-      // Refresh project data
       await fetchProject(id);
-      
+
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate content');
       setGenerationProgress({});
@@ -60,17 +103,58 @@ const ProjectView = () => {
     }
   };
 
-  const handleRegenerateSection = async (sectionId) => {
-    setRegeneratingSection(sectionId);
+  const handleRefine = async () => {
+    if (!refinementPrompt.trim()) {
+      setError('Please enter a refinement prompt');
+      return;
+    }
+
+    setRefining(true);
     setError('');
 
     try {
-      await generationApi.regenerateSection(id, sectionId);
+      await refinementApi.refineSection(selectedSection, refinementPrompt);
       await fetchProject(id);
+      await loadRefinements();
+      setRefinementPrompt('');
+      setShowRefinementInput(false);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to regenerate section');
+      setError(err.response?.data?.detail || 'Failed to refine section');
     } finally {
-      setRegeneratingSection(null);
+      setRefining(false);
+    }
+  };
+
+  const handleFeedback = async (type) => {
+    try {
+      await refinementApi.addFeedback(selectedSection, type);
+      setFeedback({
+        ...feedback,
+        [selectedSection]: { type, comment: null }
+      });
+      await loadFeedback();
+    } catch (err) {
+      setError('Failed to save feedback');
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!comment.trim()) return;
+
+    try {
+      await refinementApi.addFeedback(selectedSection, null, comment);
+      setFeedback({
+        ...feedback,
+        [selectedSection]: { 
+          ...feedback[selectedSection],
+          comment 
+        }
+      });
+      setComment('');
+      setShowCommentInput(false);
+      await loadFeedback();
+    } catch (err) {
+      setError('Failed to save comment');
     }
   };
 
@@ -79,6 +163,8 @@ const ProjectView = () => {
   };
 
   const hasContent = currentProject?.sections?.some(s => s.content);
+  const selectedSectionData = getSelectedSectionData();
+  const sectionFeedback = feedback[selectedSection];
 
   if (loading) {
     return (
@@ -107,8 +193,6 @@ const ProjectView = () => {
       </div>
     );
   }
-
-  const selectedSectionData = getSelectedSectionData();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -142,14 +226,7 @@ const ProjectView = () => {
                   </>
                 )}
               </button>
-            ) : (
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition duration-200"
-              >
-                ✓ Content Generated
-              </button>
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-start justify-between">
@@ -167,8 +244,9 @@ const ProjectView = () => {
       {/* Error Message */}
       {error && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            {error}
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex justify-between items-center">
+            <span>{error}</span>
+            <button onClick={() => setError('')} className="text-red-900 font-bold">✕</button>
           </div>
         </div>
       )}
@@ -218,7 +296,7 @@ const ProjectView = () => {
             </div>
           </div>
 
-          {/* Main Content */}
+          {/* Main Editor */}
           <div className="lg:col-span-3">
             {!hasContent && !generating ? (
               <div className="bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300 p-12 text-center">
@@ -236,67 +314,212 @@ const ProjectView = () => {
                 </button>
               </div>
             ) : selectedSectionData ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                {/* Section Header */}
-                <div className="border-b border-gray-200 p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <span className="px-3 py-1 text-xs font-semibold text-gray-600 bg-gray-100 rounded-full">
-                          {currentProject.document_type === 'docx' ? 'Section' : 'Slide'} {selectedSectionData.order + 1}
-                        </span>
-                        {selectedSectionData.content && (
-                          <span className="flex items-center space-x-1 text-xs text-green-600">
-                            <span>✓</span>
-                            <span>Generated</span>
+              <div className="space-y-4">
+                {/* Section Content Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                  {/* Section Header */}
+                  <div className="border-b border-gray-200 p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <span className="px-3 py-1 text-xs font-semibold text-gray-600 bg-gray-100 rounded-full">
+                            {currentProject.document_type === 'docx' ? 'Section' : 'Slide'} {selectedSectionData.order + 1}
                           </span>
-                        )}
+                          {selectedSectionData.content && (
+                            <span className="flex items-center space-x-1 text-xs text-green-600">
+                              <span>✓</span>
+                              <span>Generated</span>
+                            </span>
+                          )}
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-900">
+                          {selectedSectionData.title}
+                        </h2>
                       </div>
-                      <h2 className="text-2xl font-bold text-gray-900">
-                        {selectedSectionData.title}
-                      </h2>
                     </div>
+
+                    {/* Feedback Buttons */}
                     {selectedSectionData.content && (
-                      <button
-                        onClick={() => handleRegenerateSection(selectedSectionData.id)}
-                        disabled={regeneratingSection === selectedSectionData.id}
-                        className="flex items-center space-x-2 px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-200 disabled:opacity-50"
-                      >
-                        {regeneratingSection === selectedSectionData.id ? (
-                          <>
-                            <div className="spinner w-4 h-4 border-2"></div>
-                            <span>Regenerating...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>🔄</span>
-                            <span>Regenerate</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={() => handleFeedback('like')}
+                          className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition duration-200 ${
+                            sectionFeedback?.type === 'like'
+                              ? 'bg-green-100 text-green-700 border-2 border-green-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          <span className="text-lg">👍</span>
+                          <span className="text-sm font-medium">Like</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleFeedback('dislike')}
+                          className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition duration-200 ${
+                            sectionFeedback?.type === 'dislike'
+                              ? 'bg-red-100 text-red-700 border-2 border-red-500'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          <span className="text-lg">👎</span>
+                          <span className="text-sm font-medium">Dislike</span>
+                        </button>
+
+                        <button
+                          onClick={() => setShowCommentInput(!showCommentInput)}
+                          className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition duration-200"
+                        >
+                          <span className="text-lg">💬</span>
+                          <span className="text-sm font-medium">Comment</span>
+                        </button>
+
+                        <button
+                          onClick={() => setShowHistory(!showHistory)}
+                          className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition duration-200 ml-auto"
+                        >
+                          <span className="text-lg">📜</span>
+                          <span className="text-sm font-medium">History ({refinementHistory.length})</span>
+                        </button>
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* Section Content */}
-                <div className="p-6">
-                  {generationProgress[selectedSectionData.id] === 'generating' ? (
-                    <div className="flex flex-col items-center justify-center py-20">
-                      <div className="spinner mb-4"></div>
-                      <p className="text-gray-600">Generating content for this {currentProject.document_type === 'docx' ? 'section' : 'slide'}...</p>
-                    </div>
-                  ) : selectedSectionData.content ? (
-                    <div className="prose max-w-none">
-                      <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
-                        {selectedSectionData.content}
+                  {/* Comment Input */}
+                  {showCommentInput && (
+                    <div className="border-b border-gray-200 p-6 bg-blue-50">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Add Comment
+                      </label>
+                      <div className="flex space-x-3">
+                        <textarea
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                          placeholder="Share your thoughts about this section..."
+                          rows={3}
+                          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        />
+                        <button
+                          onClick={handleAddComment}
+                          disabled={!comment.trim()}
+                          className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-center py-20 text-gray-400">
-                      <p>No content generated yet</p>
+                  )}
+
+                  {/* Section Content */}
+                  <div className="p-6">
+                    {generationProgress[selectedSectionData.id] === 'generating' ? (
+                      <div className="flex flex-col items-center justify-center py-20">
+                        <div className="spinner mb-4"></div>
+                        <p className="text-gray-600">Generating content...</p>
+                      </div>
+                    ) : selectedSectionData.content ? (
+                      <div className="prose max-w-none">
+                        <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
+                          {selectedSectionData.content}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-20 text-gray-400">
+                        <p>No content generated yet</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Refinement Section */}
+                  {selectedSectionData.content && (
+                    <div className="border-t border-gray-200 p-6 bg-gray-50">
+                      {!showRefinementInput ? (
+                        <button
+                          onClick={() => setShowRefinementInput(true)}
+                          className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200"
+                        >
+                          <span>🔄</span>
+                          <span>Refine This Section</span>
+                        </button>
+                      ) : (
+                        <div className="space-y-3">
+                          <label className="block text-sm font-medium text-gray-700">
+                            How would you like to improve this section?
+                          </label>
+                          <textarea
+                            value={refinementPrompt}
+                            onChange={(e) => setRefinementPrompt(e.target.value)}
+                            placeholder="e.g., Make it more formal, Add more examples, Simplify the language..."
+                            rows={3}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          />
+                          <div className="flex space-x-3">
+                            <button
+                              onClick={handleRefine}
+                              disabled={refining || !refinementPrompt.trim()}
+                              className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50"
+                            >
+                              {refining ? (
+                                <>
+                                  <div className="spinner w-5 h-5 border-2"></div>
+                                  <span>Refining...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>✨</span>
+                                  <span>Apply Refinement</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowRefinementInput(false);
+                                setRefinementPrompt('');
+                              }}
+                              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition duration-200"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {/* Refinement History */}
+                {showHistory && refinementHistory.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Refinement History
+                    </h3>
+                    <div className="space-y-4">
+                      {refinementHistory.map((refinement, index) => (
+                        <div key={refinement.id} className="border-l-4 border-primary-500 pl-4 py-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-gray-500">
+                              Refinement #{refinementHistory.length - index}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(refinement.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            Prompt: "{refinement.prompt}"
+                          </p>
+                          <details className="text-sm text-gray-600">
+                            <summary className="cursor-pointer text-primary-600 hover:text-primary-700">
+                              View changes
+                            </summary>
+                            <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                              <p className="text-xs text-gray-500 mb-1">Before:</p>
+                              <p className="line-clamp-3">{refinement.previous_content}</p>
+                            </div>
+                          </details>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
