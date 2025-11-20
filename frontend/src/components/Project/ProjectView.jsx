@@ -93,9 +93,6 @@ const ProjectView = () => {
             <div className="bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300 p-12 text-center">
               <div className="text-6xl mb-6">🚀</div>
               <h3 className="text-2xl font-bold text-gray-900 mb-3">Ready for AI Generation</h3>
-              <p className="text-gray-600 mb-8">
-                This project is ready for content generation on Day 3
-              </p>
               <button
                 disabled
                 className="px-8 py-3 bg-gray-300 text-gray-500 rounded-lg font-semibold cursor-not-allowed"
