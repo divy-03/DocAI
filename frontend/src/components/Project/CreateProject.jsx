@@ -94,6 +94,31 @@ const CreateProject = () => {
     return formData.document_type === 'docx' ? 'Section' : 'Slide';
   };
 
+
+const [aiGenerating, setAiGenerating] = useState(false);
+
+const handleAIOutline = async () => {
+  setAiGenerating(true);
+  setError('');
+  
+  try {
+    const result = await generationApi.generateOutline(
+      formData.topic,
+      formData.document_type,
+      5
+    );
+    
+    setFormData({
+      ...formData,
+      sections: result.sections
+    });
+  } catch (err) {
+    setError('Failed to generate outline. Please try again.');
+  } finally {
+    setAiGenerating(false);
+  }
+};
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-3xl mx-auto">
@@ -239,13 +264,38 @@ const CreateProject = () => {
           )}
 
           {/* Step 3: Structure */}
-          {step === 3 && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Define Structure</h2>
-              <p className="text-gray-600 mb-8">
-                Add {formData.document_type === 'docx' ? 'sections' : 'slides'} to your document
-              </p>
+{step === 3 && (
+  <div>
+    <h2 className="text-2xl font-bold text-gray-900 mb-2">Define Structure</h2>
+    <p className="text-gray-600 mb-6">
+      Add {formData.document_type === 'docx' ? 'sections' : 'slides'} to your document
+    </p>
 
+    {/* AI Generate Outline Button */}
+    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <h4 className="text-sm font-semibold text-blue-900 mb-1">✨ AI Suggestion</h4>
+          <p className="text-xs text-blue-700">
+            Let AI suggest an outline based on your topic
+          </p>
+        </div>
+        <button
+          onClick={handleAIOutline}
+          disabled={aiGenerating || !formData.topic}
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          {aiGenerating ? (
+            <div className="flex items-center space-x-2">
+              <div className="spinner w-4 h-4 border-2"></div>
+              <span>Generating...</span>
+            </div>
+          ) : (
+            'Generate Outline'
+          )}
+        </button>
+      </div>
+    </div>
               {/* Add Section Form */}
               <div className="flex space-x-3 mb-6">
                 <input

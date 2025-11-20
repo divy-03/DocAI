@@ -9,7 +9,7 @@ class GeminiService:
     def __init__(self):
         """Initialize Gemini API with API key"""
         genai.configure(api_key=settings.gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
     
     async def generate_section_content(
         self, 
