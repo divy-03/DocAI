@@ -1,5 +1,5 @@
 import google.generativeai as genai
-from typing import Optional
+from typing import Optional, List
 import asyncio
 from config import get_settings
 
@@ -69,7 +69,6 @@ Generate detailed, professional content for this section:
 Generate only the content, no section title or additional formatting.
 """
 
-            # Run the synchronous generate_content in a thread pool
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
@@ -81,12 +80,51 @@ Generate only the content, no section title or additional formatting.
         except Exception as e:
             raise Exception(f"Error generating content with Gemini: {str(e)}")
     
+    def parse_outline(self, text: str) -> List[str]:
+        """
+        Parse AI-generated outline text into a list of section titles
+        
+        Args:
+            text: Raw text from AI containing numbered or bulleted list
+            
+        Returns:
+            List of clean section titles
+        """
+        lines = text.strip().split('\n')
+        titles = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Remove common numbering patterns
+            # Handles: "1.", "1)", "1 -", "•", "-", "*"
+            cleaned = line
+            
+            # Remove numbering: "1.", "1)", etc.
+            if line and line[0].isdigit():
+                # Find where the number ends
+                i = 0
+                while i < len(line) and (line[i].isdigit() or line[i] in '.-)'):
+                    i += 1
+                cleaned = line[i:].strip()
+            # Remove bullet points: "•", "-", "*"
+            elif line[0] in ['•', '-', '*', '→', '►']:
+                cleaned = line[1:].strip()
+            
+            # Only add non-empty titles
+            if cleaned:
+                titles.append(cleaned)
+        
+        return titles
+    
     async def generate_outline(
         self,
         topic: str,
         document_type: str = "docx",
         section_count: int = 5
-    ) -> list:
+    ) -> List[str]:
         """
         Generate document outline/structure using Gemini API
         
@@ -101,39 +139,47 @@ Generate only the content, no section title or additional formatting.
         try:
             if document_type == "pptx":
                 prompt = f"""
-Generate a presentation outline for the topic: {topic}
+Generate a professional presentation outline for: {topic}
 
-Create exactly {section_count} slide titles that:
-- Form a logical, flowing narrative
-- Cover the topic comprehensively
-- Are concise and clear (5-8 words each)
-- Follow this structure: Introduction, Main Points, Conclusion
+Requirements:
+- Create exactly {section_count} slide titles
+- Make titles concise and clear (5-8 words each)
+- Structure: Start with Introduction, cover main points, end with Conclusion
+- Ensure logical flow between slides
+- Use professional, engaging language
 
-Format: Return only the slide titles, one per line, numbered.
-Example:
-1. Introduction to [Topic]
-2. Key Concepts and Definitions
-3. [Main Point]
+Format: Return ONLY the slide titles as a numbered list.
+
+Example format:
+1. [Title]
+2. [Title]
+3. [Title]
 ...
-{section_count}. Conclusion and Next Steps
+{section_count}. [Title]
+
+Generate {section_count} slide titles now:
 """
             else:  # docx
                 prompt = f"""
-Generate a document outline for the topic: {topic}
+Generate a comprehensive document outline for: {topic}
 
-Create exactly {section_count} section titles that:
-- Form a logical, comprehensive structure
-- Cover the topic thoroughly
-- Are clear and descriptive
+Requirements:
+- Create exactly {section_count} section titles
+- Make titles descriptive and professional
+- Structure: Introduction, main content sections, conclusion
 - Follow academic/professional writing standards
+- Ensure comprehensive coverage of the topic
 
-Format: Return only the section titles, one per line, numbered.
-Example:
-1. Introduction
-2. Background and Context
-3. [Main Section]
+Format: Return ONLY the section titles as a numbered list.
+
+Example format:
+1. [Title]
+2. [Title]
+3. [Title]
 ...
-{section_count}. Conclusion
+{section_count}. [Title]
+
+Generate {section_count} section titles now:
 """
 
             loop = asyncio.get_event_loop()
@@ -143,19 +189,15 @@ Example:
             )
             
             # Parse the response to extract titles
-            lines = response.text.strip().split('\n')
-            titles = []
+            titles = self.parse_outline(response.text)
             
-            for line in lines:
-                line = line.strip()
-                if line and (line[0].isdigit() or line.startswith('-') or line.startswith('•')):
-                    # Remove numbering and bullet points
-                    title = line.split('.', 1)[-1].strip() if '.' in line else line.lstrip('-•').strip()
-                    if title:
-                        titles.append(title)
+            # Return exactly section_count titles (or pad if fewer)
+            if len(titles) < section_count:
+                # If we got fewer titles, pad with generic ones
+                for i in range(len(titles), section_count):
+                    titles.append(f"Additional Section {i + 1}")
             
-            # Return exactly section_count titles
-            return titles[:section_count] if len(titles) >= section_count else titles
+            return titles[:section_count]
             
         except Exception as e:
             raise Exception(f"Error generating outline with Gemini: {str(e)}")
