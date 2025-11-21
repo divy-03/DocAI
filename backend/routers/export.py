@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Project, Section, User
 from auth import get_current_user
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from pptx import Presentation
 from pptx.util import Inches, Pt as PptPt
-import os
-import tempfile
+import io
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -46,21 +46,28 @@ async def export_document(
         )
     
     try:
-        if project.document_type.value == "docx":
-            file_path = create_docx(project, sections)
-            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            filename = f"{project.title.replace(' ', '_')}.docx"
-        else:
-            file_path = create_pptx(project, sections)
-            media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            filename = f"{project.title.replace(' ', '_')}.pptx"
+        # Create filename
+        safe_title = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in project.title)
+        safe_title = safe_title.replace(' ', '_')
         
-        return FileResponse(
-            path=file_path,
+        if project.document_type.value == "docx":
+            # Create DOCX in memory
+            file_stream = create_docx(project, sections)
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            filename = f"{safe_title}.docx"
+        else:  # pptx
+            # Create PPTX in memory
+            file_stream = create_pptx(project, sections)
+            media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            filename = f"{safe_title}.pptx"
+        
+        # Return as streaming response
+        return StreamingResponse(
+            file_stream,
             media_type=media_type,
-            filename=filename,
             headers={
-                "Content-Disposition": f"attachment; filename={filename}"
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": media_type
             }
         )
     
@@ -70,79 +77,114 @@ async def export_document(
             detail=f"Error exporting document: {str(e)}"
         )
 
-def create_docx(project: Project, sections: list) -> str:
+def create_docx(project: Project, sections: list) -> io.BytesIO:
     """
-    Create DOCX file from project content
+    Create DOCX file in memory from project content
+    Returns: BytesIO stream
     """
+    # Create document
     doc = Document()
+    
+    # Set default font
+    style = doc.styles['Normal']
+    style.font.name = 'Calibri'
+    style.font.size = Pt(11)
     
     # Add title
     title = doc.add_heading(project.title, 0)
-    title.alignment = 1  # Center alignment
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title.runs[0]
+    title_run.font.color.rgb = RGBColor(31, 78, 121)
+    title_run.font.size = Pt(36)
     
     # Add topic as subtitle
     topic_para = doc.add_paragraph(project.topic)
-    topic_para.alignment = 1
-    topic_para.runs[0].italic = True
-    topic_para.runs[0].font.size = Pt(12)
+    topic_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    topic_para_run = topic_para.runs[0]
+    topic_para_run.italic = True
+    topic_para_run.font.size = Pt(14)
+    topic_para_run.font.color.rgb = RGBColor(89, 89, 89)
     
-    doc.add_paragraph()  # Spacing
+    # Add page break
+    doc.add_page_break()
     
     # Add each section
-    for section in sections:
+    for idx, section in enumerate(sections):
         if section.content:
             # Section heading
             heading = doc.add_heading(section.title, 1)
+            heading_run = heading.runs[0]
+            heading_run.font.color.rgb = RGBColor(31, 78, 121)
+            heading_run.font.size = Pt(24)
             
             # Section content
             content_para = doc.add_paragraph(section.content)
-            content_para.alignment = 3  # Justify
+            content_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            content_para.paragraph_format.line_spacing = 1.15
+            content_para.paragraph_format.space_after = Pt(12)
             
-            # Add spacing between sections
-            doc.add_paragraph()
+            # Add spacing between sections (but not after last one)
+            if idx < len([s for s in sections if s.content]) - 1:
+                doc.add_paragraph()
     
-    # Save to temporary file
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
-    doc.save(temp_file.name)
-    temp_file.close()
+    # Save to BytesIO stream
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
     
-    return temp_file.name
+    return file_stream
 
-def create_pptx(project: Project, sections: list) -> str:
+def create_pptx(project: Project, sections: list) -> io.BytesIO:
     """
-    Create PPTX file from project content
+    Create PPTX file in memory from project content
+    Returns: BytesIO stream
     """
+    # Create presentation
     prs = Presentation()
     
-    # Set slide size to standard (16:9)
+    # Set slide dimensions (16:9)
     prs.slide_width = Inches(10)
     prs.slide_height = Inches(7.5)
     
     # Title slide
     title_slide_layout = prs.slide_layouts[0]
-    title_slide = prs.slides.add_slide(title_slide_layout)
-    title = title_slide.shapes.title
-    subtitle = title_slide.placeholders[1]
+    slide = prs.slides.add_slide(title_slide_layout)
+    title = slide.shapes.title
+    subtitle = slide.placeholders[1]
     
     title.text = project.title
     subtitle.text = project.topic
+    
+    # Format title slide
+    for paragraph in title.text_frame.paragraphs:
+        paragraph.font.size = PptPt(54)
+        paragraph.font.bold = True
+    
+    for paragraph in subtitle.text_frame.paragraphs:
+        paragraph.font.size = PptPt(24)
     
     # Content slides
     for section in sections:
         if section.content:
             # Use title and content layout
-            slide_layout = prs.slide_layouts[1]
-            slide = prs.slides.add_slide(slide_layout)
+            content_slide_layout = prs.slide_layouts[1]
+            slide = prs.slides.add_slide(content_slide_layout)
             
             # Set title
-            title = slide.shapes.title
-            title.text = section.title
+            title_shape = slide.shapes.title
+            title_shape.text = section.title
+            
+            # Format title
+            for paragraph in title_shape.text_frame.paragraphs:
+                paragraph.font.size = PptPt(40)
+                paragraph.font.bold = True
             
             # Set content
-            content_placeholder = slide.placeholders[1]
-            text_frame = content_placeholder.text_frame
+            body_shape = slide.placeholders[1]
+            text_frame = body_shape.text_frame
+            text_frame.clear()
             
-            # Split content into bullet points (if not already)
+            # Split content into bullet points
             content_lines = section.content.split('\n')
             
             for i, line in enumerate(content_lines):
@@ -155,11 +197,14 @@ def create_pptx(project: Project, sections: list) -> str:
                     
                     p.text = line
                     p.level = 0
-                    p.font.size = PptPt(18)
+                    p.font.size = PptPt(20)
+                    p.space_before = PptPt(6)
+                    p.space_after = PptPt(6)
     
-    # Save to temporary file
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pptx')
-    prs.save(temp_file.name)
-    temp_file.close()
+    # Save to BytesIO stream
+    file_stream = io.BytesIO()
+    prs.save(file_stream)
+    file_stream.seek(0)
     
-    return temp_file.name
+    return file_stream
+
