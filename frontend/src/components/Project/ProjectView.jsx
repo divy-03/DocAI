@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import useProjectStore from '../../store/projectStore';
 import { generationApi } from '../../api/generation';
 import { refinementApi } from '../../api/refinement';
+import { exportApi } from '../../api/export';
 import { showToast } from '../../utils/toast';
 
 const ProjectView = () => {
@@ -28,6 +29,9 @@ const ProjectView = () => {
   const [feedback, setFeedback] = useState({});
   const [comment, setComment] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
+
+  // Export state
+  const [exporting, setExporting] = useState(false);
 
   // Load project on mount
   useEffect(() => {
@@ -191,6 +195,23 @@ const ProjectView = () => {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    const toastId = showToast.loading('Preparing document for download...');
+    
+    try {
+      await exportApi.downloadDocument(id);
+      toast.dismiss(toastId);
+      showToast.success('Document downloaded successfully! 📥');
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || 'Failed to export document';
+      toast.dismiss(toastId);
+      showToast.error(errorMsg);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getSelectedSectionData = () => {
     return currentProject?.sections?.find(s => s.id === selectedSection);
   };
@@ -262,9 +283,28 @@ const ProjectView = () => {
                 )}
               </button>
             ) : (
-              <div className="flex items-center space-x-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
-                <span>✓</span>
-                <span className="font-medium">Content Generated</span>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="flex items-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                >
+                  {exporting ? (
+                    <>
+                      <div className="spinner w-5 h-5 border-2 border-white"></div>
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📥</span>
+                      <span>Download {currentProject.document_type.toUpperCase()}</span>
+                    </>
+                  )}
+                </button>
+                <div className="flex items-center space-x-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                  <span>✓</span>
+                  <span className="font-medium text-sm">Ready to Export</span>
+                </div>
               </div>
             )}
           </div>
