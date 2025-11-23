@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
+    client_url: str
     database_url: str
     secret_key: str
     algorithm: str = "HS256"

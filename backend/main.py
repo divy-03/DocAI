@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
 from routers import auth, projects, generation, refinement, export
+from config import get_settings
+
+settings = get_settings()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -15,7 +18,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[settings.client_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
