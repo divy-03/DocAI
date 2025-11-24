@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import useProjectStore from '../../store/projectStore';
 import { generationApi } from '../../api/generation';
 import { showToast } from '../../utils/toast';
+import toast from 'react-hot-toast';
 
 const CreateProject = () => {
   const navigate = useNavigate();
