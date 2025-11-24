@@ -40,15 +40,18 @@ const Editor = ({ project, onUpdate }) => {
   const handleFeedback = async (sectionId, feedbackType, comment = null) => {
     try {
       await refinementApi.addFeedback(sectionId, feedbackType, comment);
-      
     } catch (error) {
       throw error;
     }
   };
 
-  // Manual update handler (currently does nothing to prevent refresh)
-  const handleManualUpdate = async () => {
-    // Do nothing - this prevents page refresh while keeping changes
+  // FIX: Update local sections state when manual edits are made
+  const handleManualUpdate = (sectionId, updates) => {
+    setSections(prevSections =>
+      prevSections.map(section =>
+        section.id === sectionId ? { ...section, ...updates } : section
+      )
+    );
   };
 
   const selectedSectionData = sections.find(s => s.id === selectedSection);

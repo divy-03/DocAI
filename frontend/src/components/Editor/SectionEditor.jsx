@@ -105,42 +105,50 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
   };
 
   const handleSaveTitle = async () => {
-    if (editedTitle.trim() === section.title) {
-      setIsEditingTitle(false);
-      return;
-    }
+  if (editedTitle.trim() === section.title) {
+    setIsEditingTitle(false);
+    return;
+  }
 
-    setIsSaving(true);
-    try {
-      await sectionsApi.updateSection(section.id, { title: editedTitle });
-      setIsEditingTitle(false);
-      // Don't call onManualUpdate to avoid page refresh
-    } catch (err) {
-      setError('Failed to save title');
-      setEditedTitle(section.title);
-    } finally {
-      setIsSaving(false);
+  setIsSaving(true);
+  try {
+    await sectionsApi.updateSection(section.id, { title: editedTitle });
+    setIsEditingTitle(false);
+    
+    // FIX: Update parent state to reflect changes immediately
+    if (onManualUpdate) {
+      onManualUpdate(section.id, { title: editedTitle });
     }
-  };
+  } catch (err) {
+    setError('Failed to save title');
+    setEditedTitle(section.title);
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleSaveContent = async () => {
-    if (editedContent === section.content) {
-      setIsEditingContent(false);
-      return;
-    }
+  if (editedContent === section.content) {
+    setIsEditingContent(false);
+    return;
+  }
 
-    setIsSaving(true);
-    try {
-      await sectionsApi.updateSection(section.id, { content: editedContent });
-      setIsEditingContent(false);
-      // Don't call onManualUpdate to avoid page refresh
-    } catch (err) {
-      setError('Failed to save content');
-      setEditedContent(section.content);
-    } finally {
-      setIsSaving(false);
+  setIsSaving(true);
+  try {
+    await sectionsApi.updateSection(section.id, { content: editedContent });
+    setIsEditingContent(false);
+    
+    // FIX: Update parent state to reflect changes immediately
+    if (onManualUpdate) {
+      onManualUpdate(section.id, { content: editedContent });
     }
-  };
+  } catch (err) {
+    setError('Failed to save content');
+    setEditedContent(section.content);
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleCancelEdit = (type) => {
     if (type === 'title') {
@@ -173,31 +181,34 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
   };
 
   const handleAcceptRefinement = async () => {
-    setIsSaving(true);
-    try {
-      await refinementApi.acceptRefinement(
-        section.id,
-        refinementPrompt,
-        refinementPreview.refined_content
-      );
-      
-      setEditedContent(refinementPreview.refined_content);
-      setRefinementPrompt('');
-      setShowRefinementPanel(false);
-      setShowPreview(false);
-      setRefinementPreview(null);
-      
-      // Don't call onManualUpdate to avoid page refresh
-      
-      if (showHistory) {
-        await loadRefinementHistory();
-      }
-    } catch (err) {
-      setError('Failed to accept refinement');
-    } finally {
-      setIsSaving(false);
+  setIsSaving(true);
+  try {
+    await refinementApi.acceptRefinement(
+      section.id,
+      refinementPrompt,
+      refinementPreview.refined_content
+    );
+    
+    setEditedContent(refinementPreview.refined_content);
+    setRefinementPrompt('');
+    setShowRefinementPanel(false);
+    setShowPreview(false);
+    setRefinementPreview(null);
+    
+    // FIX: Update parent state to reflect changes immediately
+    if (onManualUpdate) {
+      onManualUpdate(section.id, { content: refinementPreview.refined_content });
     }
-  };
+    
+    if (showHistory) {
+      await loadRefinementHistory();
+    }
+  } catch (err) {
+    setError('Failed to accept refinement');
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleRejectRefinement = () => {
     setShowPreview(false);
@@ -205,21 +216,25 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
   };
 
   const handleRestoreVersion = async (refinement) => {
-    if (window.confirm('Restore this version? Current content will be replaced.')) {
-      setIsSaving(true);
-      try {
-        await sectionsApi.updateSection(section.id, { 
-          content: refinement.previous_content 
-        });
-        setEditedContent(refinement.previous_content);
-        // Don't call onManualUpdate to avoid page refresh
-      } catch (err) {
-        setError('Failed to restore version');
-      } finally {
-        setIsSaving(false);
+  if (window.confirm('Restore this version? Current content will be replaced.')) {
+    setIsSaving(true);
+    try {
+      await sectionsApi.updateSection(section.id, { 
+        content: refinement.previous_content 
+      });
+      setEditedContent(refinement.previous_content);
+      
+      // FIX: Update parent state to reflect changes immediately
+      if (onManualUpdate) {
+        onManualUpdate(section.id, { content: refinement.previous_content });
       }
+    } catch (err) {
+      setError('Failed to restore version');
+    } finally {
+      setIsSaving(false);
     }
-  };
+  }
+};
 
   // FIX: Don't refresh page after feedback
   const handleFeedbackClick = async (type) => {
