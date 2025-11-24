@@ -59,6 +59,14 @@ class RefinementResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class RefinementPreviewRequest(BaseModel):
+    prompt: str
+
+class RefinementPreviewResponse(BaseModel):
+    original_content: str
+    refined_content: str
+    section_id: int
+
 # Feedback Schemas
 class FeedbackCreate(BaseModel):
     feedback_type: Optional[FeedbackType] = None

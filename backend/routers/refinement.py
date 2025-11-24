@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
@@ -9,7 +9,9 @@ from schemas import (
     FeedbackCreate, 
     FeedbackResponse,
     SectionDetailResponse,
-    SectionResponse
+    SectionResponse,
+    RefinementPreviewResponse,
+    RefinementPreviewRequest
 )
 from auth import get_current_user
 from services.gemini_service import gemini_service
@@ -250,3 +252,139 @@ async def get_section_details(
         )
     
     return section
+
+@router.post("/sections/{section_id}/refine-preview", response_model=RefinementPreviewResponse)
+async def preview_refinement(
+    section_id: int,
+    refinement_data: RefinementPreviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Preview refinement without saving - for accept/reject workflow
+    """
+    section = db.query(Section).filter(Section.id == section_id).first()
+    
+    if not section:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Section not found"
+        )
+    
+    # Verify user owns the project
+    project = db.query(Project).filter(
+        Project.id == section.project_id,
+        Project.user_id == current_user.id
+    ).first()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to modify this section"
+        )
+    
+    if not section.content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot refine section without existing content"
+        )
+    
+    try:
+        # Create refinement prompt
+        refinement_prompt = f"""
+You are refining existing content based on user feedback.
+
+Original Content:
+{section.content}
+
+User's Refinement Request:
+{refinement_data.prompt}
+
+Generate improved content that:
+- Addresses the user's specific refinement request
+- Maintains the overall structure and flow
+- Keeps approximately the same length
+- Improves quality based on the feedback
+- Stays relevant to the section topic
+
+Generate only the refined content, no additional formatting or explanations.
+"""
+        
+        # Generate refined content
+        loop = __import__('asyncio').get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: gemini_service.model.generate_content(refinement_prompt)
+        )
+        
+        new_content = response.text.strip()
+        
+        return RefinementPreviewResponse(
+            original_content=section.content,
+            refined_content=new_content,
+            section_id=section_id
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating refinement preview: {str(e)}"
+        )
+
+@router.post("/sections/{section_id}/refine-accept")
+async def accept_refinement(
+    section_id: int,
+    data: dict = Body(...),  # Changed to accept a dict
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Accept and save the refined content
+    """
+    section = db.query(Section).filter(Section.id == section_id).first()
+    
+    if not section:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Section not found"
+        )
+    
+    # Verify user owns the project
+    project = db.query(Project).filter(
+        Project.id == section.project_id,
+        Project.user_id == current_user.id
+    ).first()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized"
+        )
+    
+    # Extract data
+    prompt = data.get('prompt')
+    new_content = data.get('content')
+    
+    if not prompt or not new_content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Prompt and content are required"
+        )
+    
+    # Store refinement history
+    refinement = Refinement(
+        prompt=prompt,
+        previous_content=section.content,
+        new_content=new_content,
+        section_id=section_id
+    )
+    db.add(refinement)
+    
+    # Update section content
+    section.content = new_content
+    
+    db.commit()
+    db.refresh(section)
+    
+    return {"message": "Refinement accepted", "section": section}
+
