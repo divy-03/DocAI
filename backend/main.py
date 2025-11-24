@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
-from routers import auth, projects, generation, refinement, export
+from routers import auth, projects, generation, refinement, export, sections
 from config import get_settings
 
 settings = get_settings()
@@ -29,6 +29,7 @@ app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(generation.router)
 app.include_router(refinement.router)
+app.include_router(sections.router)
 app.include_router(export.router)
 
 @app.get("/")
