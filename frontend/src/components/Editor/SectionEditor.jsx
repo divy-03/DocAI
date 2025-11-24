@@ -35,13 +35,28 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
   const titleInputRef = useRef(null);
   const contentTextareaRef = useRef(null);
 
+  // FIX: Reset all states when section changes
   useEffect(() => {
     setEditedTitle(section.title);
     setEditedContent(section.content || '');
+    
+    // Reset feedback states
+    setFeedbackType(null);
+    setComment('');
+    setShowCommentBox(false);
+    
+    // Reset refinement states
+    setShowRefinementPanel(false);
+    setRefinementPrompt('');
+    setShowPreview(false);
+    setRefinementPreview(null);
+    
+    // Reset history
+    setShowHistory(false);
+    setRefinementHistory([]);
+    
+    // Load feedback for new section
     loadFeedback();
-    if (showHistory) {
-      loadRefinementHistory();
-    }
   }, [section.id]);
 
   useEffect(() => {
@@ -64,9 +79,16 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
         const latest = feedbacks[0];
         setFeedbackType(latest.feedback_type);
         setComment(latest.comment || '');
+      } else {
+        // No feedback found, reset states
+        setFeedbackType(null);
+        setComment('');
       }
     } catch (err) {
       console.error('Failed to load feedback:', err);
+      // Reset on error
+      setFeedbackType(null);
+      setComment('');
     }
   };
 
@@ -82,50 +104,43 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
     }
   };
 
-const handleSaveTitle = async () => {
-  if (editedTitle.trim() === section.title) {
-    setIsEditingTitle(false);
-    return;
-  }
-
-  setIsSaving(true);
-  try {
-    await sectionsApi.updateSection(section.id, { title: editedTitle });
-    setIsEditingTitle(false);
-    // Call the manual update handler instead of onRefine
-    if (onManualUpdate) {
-      await onManualUpdate();
+  const handleSaveTitle = async () => {
+    if (editedTitle.trim() === section.title) {
+      setIsEditingTitle(false);
+      return;
     }
-  } catch (err) {
-    setError('Failed to save title');
-    setEditedTitle(section.title);
-  } finally {
-    setIsSaving(false);
-  }
-};
 
-const handleSaveContent = async () => {
-  if (editedContent === section.content) {
-    setIsEditingContent(false);
-    return;
-  }
-
-  setIsSaving(true);
-  try {
-    await sectionsApi.updateSection(section.id, { content: editedContent });
-    setIsEditingContent(false);
-    // Call the manual update handler instead of onRefine
-    if (onManualUpdate) {
-      await onManualUpdate();
+    setIsSaving(true);
+    try {
+      await sectionsApi.updateSection(section.id, { title: editedTitle });
+      setIsEditingTitle(false);
+      // Don't call onManualUpdate to avoid page refresh
+    } catch (err) {
+      setError('Failed to save title');
+      setEditedTitle(section.title);
+    } finally {
+      setIsSaving(false);
     }
-  } catch (err) {
-    setError('Failed to save content');
-    setEditedContent(section.content);
-  } finally {
-    setIsSaving(false);
-  }
-};
+  };
 
+  const handleSaveContent = async () => {
+    if (editedContent === section.content) {
+      setIsEditingContent(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await sectionsApi.updateSection(section.id, { content: editedContent });
+      setIsEditingContent(false);
+      // Don't call onManualUpdate to avoid page refresh
+    } catch (err) {
+      setError('Failed to save content');
+      setEditedContent(section.content);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleCancelEdit = (type) => {
     if (type === 'title') {
@@ -157,63 +172,56 @@ const handleSaveContent = async () => {
     }
   };
 
-  
-const handleAcceptRefinement = async () => {
-  setIsSaving(true);
-  try {
-    await refinementApi.acceptRefinement(
-      section.id,
-      refinementPrompt,
-      refinementPreview.refined_content
-    );
-    
-    setEditedContent(refinementPreview.refined_content);
-    setRefinementPrompt('');
-    setShowRefinementPanel(false);
-    setShowPreview(false);
-    setRefinementPreview(null);
-    
-    // Call the manual update handler
-    if (onManualUpdate) {
-      await onManualUpdate();
+  const handleAcceptRefinement = async () => {
+    setIsSaving(true);
+    try {
+      await refinementApi.acceptRefinement(
+        section.id,
+        refinementPrompt,
+        refinementPreview.refined_content
+      );
+      
+      setEditedContent(refinementPreview.refined_content);
+      setRefinementPrompt('');
+      setShowRefinementPanel(false);
+      setShowPreview(false);
+      setRefinementPreview(null);
+      
+      // Don't call onManualUpdate to avoid page refresh
+      
+      if (showHistory) {
+        await loadRefinementHistory();
+      }
+    } catch (err) {
+      setError('Failed to accept refinement');
+    } finally {
+      setIsSaving(false);
     }
-    
-    if (showHistory) {
-      await loadRefinementHistory();
-    }
-  } catch (err) {
-    setError('Failed to accept refinement');
-  } finally {
-    setIsSaving(false);
-  }
-};
+  };
 
   const handleRejectRefinement = () => {
     setShowPreview(false);
     setRefinementPreview(null);
   };
 
-  
-const handleRestoreVersion = async (refinement) => {
-  if (window.confirm('Restore this version? Current content will be replaced.')) {
-    setIsSaving(true);
-    try {
-      await sectionsApi.updateSection(section.id, { 
-        content: refinement.previous_content 
-      });
-      setEditedContent(refinement.previous_content);
-      // Call the manual update handler
-      if (onManualUpdate) {
-        await onManualUpdate();
+  const handleRestoreVersion = async (refinement) => {
+    if (window.confirm('Restore this version? Current content will be replaced.')) {
+      setIsSaving(true);
+      try {
+        await sectionsApi.updateSection(section.id, { 
+          content: refinement.previous_content 
+        });
+        setEditedContent(refinement.previous_content);
+        // Don't call onManualUpdate to avoid page refresh
+      } catch (err) {
+        setError('Failed to restore version');
+      } finally {
+        setIsSaving(false);
       }
-    } catch (err) {
-      setError('Failed to restore version');
-    } finally {
-      setIsSaving(false);
     }
-  }
-};
+  };
 
+  // FIX: Don't refresh page after feedback
   const handleFeedbackClick = async (type) => {
     setIsSavingFeedback(true);
     try {
@@ -226,6 +234,7 @@ const handleRestoreVersion = async (refinement) => {
     }
   };
 
+  // FIX: Don't refresh page after comment
   const handleCommentSave = async () => {
     if (!comment.trim()) return;
 

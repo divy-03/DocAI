@@ -31,10 +31,6 @@ const Editor = ({ project, onUpdate }) => {
         )
       );
 
-      if (onUpdate) {
-        onUpdate();
-      }
-
       return updatedSection;
     } catch (error) {
       throw error;
@@ -45,20 +41,14 @@ const Editor = ({ project, onUpdate }) => {
     try {
       await refinementApi.addFeedback(sectionId, feedbackType, comment);
       
-      if (onUpdate) {
-        onUpdate();
-      }
     } catch (error) {
       throw error;
     }
   };
 
-  // NEW: Handle manual updates (title/content edits)
+  // Manual update handler (currently does nothing to prevent refresh)
   const handleManualUpdate = async () => {
-    // Just trigger a refresh
-    if (onUpdate) {
-      await onUpdate();
-    }
+    // Do nothing - this prevents page refresh while keeping changes
   };
 
   const selectedSectionData = sections.find(s => s.id === selectedSection);
