@@ -1,7 +1,27 @@
 import apiClient from './client';
 
 export const refinementApi = {
-  // Refine section content
+  // Preview refinement (doesn't save)
+  previewRefinement: async (sectionId, prompt) => {
+    const response = await apiClient.post(`/refinement/sections/${sectionId}/refine-preview`, {
+      prompt
+    });
+    return response.data;
+  },
+
+  // Accept and save refinement - FIXED
+  acceptRefinement: async (sectionId, prompt, content) => {
+    const response = await apiClient.post(
+      `/refinement/sections/${sectionId}/refine-accept`,
+      {
+        prompt: prompt,
+        content: content
+      }
+    );
+    return response.data;
+  },
+
+  // Refine section content (existing)
   refineSection: async (sectionId, prompt) => {
     const response = await apiClient.post(`/refinement/sections/${sectionId}/refine`, {
       prompt

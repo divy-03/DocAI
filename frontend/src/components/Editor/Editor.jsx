@@ -53,6 +53,14 @@ const Editor = ({ project, onUpdate }) => {
     }
   };
 
+  // NEW: Handle manual updates (title/content edits)
+  const handleManualUpdate = async () => {
+    // Just trigger a refresh
+    if (onUpdate) {
+      await onUpdate();
+    }
+  };
+
   const selectedSectionData = sections.find(s => s.id === selectedSection);
 
   return (
@@ -73,6 +81,7 @@ const Editor = ({ project, onUpdate }) => {
             documentType={project?.document_type}
             onRefine={handleRefine}
             onFeedback={handleFeedback}
+            onManualUpdate={handleManualUpdate}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -85,3 +94,4 @@ const Editor = ({ project, onUpdate }) => {
 };
 
 export default Editor;
+

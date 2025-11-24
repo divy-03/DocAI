@@ -1,11 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import RefinementPanel from './RefinementPanel';
+import RefinementPreview from './RefinementPreview';
 import { refinementApi } from '../../api/refinement';
+import { sectionsApi } from '../../api/sections';
 
-const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
+const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUpdate }) => {
+
+  // Editing states
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingContent, setIsEditingContent] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(section.title);
+  const [editedContent, setEditedContent] = useState(section.content || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Refinement states
   const [isRefining, setIsRefining] = useState(false);
   const [refinementPrompt, setRefinementPrompt] = useState('');
   const [showRefinementPanel, setShowRefinementPanel] = useState(false);
+  const [refinementPreview, setRefinementPreview] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState('');
   
   // Feedback states
@@ -19,12 +32,30 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  const titleInputRef = useRef(null);
+  const contentTextareaRef = useRef(null);
+
   useEffect(() => {
+    setEditedTitle(section.title);
+    setEditedContent(section.content || '');
     loadFeedback();
     if (showHistory) {
       loadRefinementHistory();
     }
   }, [section.id]);
+
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  useEffect(() => {
+    if (isEditingContent && contentTextareaRef.current) {
+      contentTextareaRef.current.focus();
+    }
+  }, [isEditingContent]);
 
   const loadFeedback = async () => {
     try {
@@ -51,7 +82,62 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
     }
   };
 
-  const handleRefine = async () => {
+const handleSaveTitle = async () => {
+  if (editedTitle.trim() === section.title) {
+    setIsEditingTitle(false);
+    return;
+  }
+
+  setIsSaving(true);
+  try {
+    await sectionsApi.updateSection(section.id, { title: editedTitle });
+    setIsEditingTitle(false);
+    // Call the manual update handler instead of onRefine
+    if (onManualUpdate) {
+      await onManualUpdate();
+    }
+  } catch (err) {
+    setError('Failed to save title');
+    setEditedTitle(section.title);
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const handleSaveContent = async () => {
+  if (editedContent === section.content) {
+    setIsEditingContent(false);
+    return;
+  }
+
+  setIsSaving(true);
+  try {
+    await sectionsApi.updateSection(section.id, { content: editedContent });
+    setIsEditingContent(false);
+    // Call the manual update handler instead of onRefine
+    if (onManualUpdate) {
+      await onManualUpdate();
+    }
+  } catch (err) {
+    setError('Failed to save content');
+    setEditedContent(section.content);
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+
+  const handleCancelEdit = (type) => {
+    if (type === 'title') {
+      setEditedTitle(section.title);
+      setIsEditingTitle(false);
+    } else {
+      setEditedContent(section.content);
+      setIsEditingContent(false);
+    }
+  };
+
+  const handleRefinePreview = async () => {
     if (!refinementPrompt.trim()) {
       setError('Please enter a refinement prompt');
       return;
@@ -61,20 +147,72 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
     setError('');
 
     try {
-      await onRefine(section.id, refinementPrompt);
-      setRefinementPrompt('');
-      setShowRefinementPanel(false);
-      
-      // Reload history after refinement
-      if (showHistory) {
-        await loadRefinementHistory();
-      }
+      const preview = await refinementApi.previewRefinement(section.id, refinementPrompt);
+      setRefinementPreview(preview);
+      setShowPreview(true);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to refine section');
+      setError(err.response?.data?.detail || 'Failed to generate refinement preview');
     } finally {
       setIsRefining(false);
     }
   };
+
+  
+const handleAcceptRefinement = async () => {
+  setIsSaving(true);
+  try {
+    await refinementApi.acceptRefinement(
+      section.id,
+      refinementPrompt,
+      refinementPreview.refined_content
+    );
+    
+    setEditedContent(refinementPreview.refined_content);
+    setRefinementPrompt('');
+    setShowRefinementPanel(false);
+    setShowPreview(false);
+    setRefinementPreview(null);
+    
+    // Call the manual update handler
+    if (onManualUpdate) {
+      await onManualUpdate();
+    }
+    
+    if (showHistory) {
+      await loadRefinementHistory();
+    }
+  } catch (err) {
+    setError('Failed to accept refinement');
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+  const handleRejectRefinement = () => {
+    setShowPreview(false);
+    setRefinementPreview(null);
+  };
+
+  
+const handleRestoreVersion = async (refinement) => {
+  if (window.confirm('Restore this version? Current content will be replaced.')) {
+    setIsSaving(true);
+    try {
+      await sectionsApi.updateSection(section.id, { 
+        content: refinement.previous_content 
+      });
+      setEditedContent(refinement.previous_content);
+      // Call the manual update handler
+      if (onManualUpdate) {
+        await onManualUpdate();
+      }
+    } catch (err) {
+      setError('Failed to restore version');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+};
 
   const handleFeedbackClick = async (type) => {
     setIsSavingFeedback(true);
@@ -122,6 +260,16 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
         </div>
       )}
 
+      {/* Refinement Preview Modal */}
+      {showPreview && refinementPreview && (
+        <RefinementPreview
+          preview={refinementPreview}
+          onAccept={handleAcceptRefinement}
+          onReject={handleRejectRefinement}
+          isSaving={isSaving}
+        />
+      )}
+
       {/* Main Content Card */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         {/* Header */}
@@ -137,7 +285,49 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
               </span>
             )}
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">{section.title}</h1>
+
+          {/* Editable Title */}
+          {isEditingTitle ? (
+            <div className="space-y-2">
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveTitle();
+                  if (e.key === 'Escape') handleCancelEdit('title');
+                }}
+                className="w-full text-3xl font-bold text-gray-900 bg-white border-2 border-primary-500 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-600"
+              />
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleSaveTitle}
+                  disabled={isSaving}
+                  className="px-4 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => handleCancelEdit('title')}
+                  className="px-4 py-1.5 text-sm bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="group relative">
+              <h1 className="text-3xl font-bold text-gray-900">{section.title}</h1>
+              <button
+                onClick={() => setIsEditingTitle(true)}
+                className="absolute -right-2 top-0 opacity-0 group-hover:opacity-100 p-2 text-primary-600 hover:text-primary-700 transition-all"
+                title="Edit title"
+              >
+                <span className="text-xl">✏️</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Feedback Bar */}
@@ -224,14 +414,53 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
           </div>
         )}
 
-        {/* Content Display */}
+        {/* Content Display/Edit */}
         <div className="p-8">
           {section.content ? (
-            <div className="prose prose-lg max-w-none">
-              <div className="text-gray-800 leading-relaxed whitespace-pre-wrap">
-                {section.content}
+            isEditingContent ? (
+              <div className="space-y-3">
+                <textarea
+                  ref={contentTextareaRef}
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  rows={15}
+                  className="w-full px-4 py-3 border-2 border-primary-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-600 font-mono text-sm"
+                />
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleSaveContent}
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 font-medium"
+                  >
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    onClick={() => handleCancelEdit('content')}
+                    className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="group relative">
+                <div className="prose prose-lg max-w-none">
+                  <div className="text-gray-800 leading-relaxed whitespace-pre-wrap">
+                    {section.content}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsEditingContent(true)}
+                  className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all shadow-md"
+                  title="Edit content"
+                >
+                  <span className="flex items-center space-x-2">
+                    <span className="text-lg">✏️</span>
+                    <span className="text-sm font-medium">Edit Content</span>
+                  </span>
+                </button>
+              </div>
+            )
           ) : (
             <div className="text-center py-16 text-gray-400">
               <div className="text-6xl mb-4">📝</div>
@@ -242,13 +471,13 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
         </div>
 
         {/* Refinement Panel */}
-        {section.content && (
+        {section.content && !isEditingContent && (
           <RefinementPanel
             isOpen={showRefinementPanel}
             onToggle={() => setShowRefinementPanel(!showRefinementPanel)}
             refinementPrompt={refinementPrompt}
             onPromptChange={setRefinementPrompt}
-            onRefine={handleRefine}
+            onRefine={handleRefinePreview}
             isRefining={isRefining}
           />
         )}
@@ -277,9 +506,18 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
                     <span className="text-sm font-semibold text-primary-700">
                       Refinement #{refinementHistory.length - index}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      {new Date(refinement.created_at).toLocaleString()}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-gray-500">
+                        {new Date(refinement.created_at).toLocaleString()}
+                      </span>
+                      <button
+                        onClick={() => handleRestoreVersion(refinement)}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        title="Restore this version"
+                      >
+                        Restore
+                      </button>
+                    </div>
                   </div>
                   <div className="mb-3">
                     <span className="text-xs font-medium text-gray-500">Prompt:</span>
@@ -293,7 +531,7 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
                     </summary>
                     <div className="mt-3 p-4 bg-white rounded-lg border border-gray-200">
                       <p className="text-xs font-medium text-gray-500 mb-2">Previous Version:</p>
-                      <p className="text-gray-700 whitespace-pre-wrap line-clamp-4">
+                      <p className="text-gray-700 whitespace-pre-wrap">
                         {refinement.previous_content}
                       </p>
                     </div>
@@ -314,3 +552,4 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback }) => {
 };
 
 export default SectionEditor;
+
