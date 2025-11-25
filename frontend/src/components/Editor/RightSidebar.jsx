@@ -135,7 +135,18 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
     }
   };
 
-  if (!isOpen) return null;
+  // Collapsed state - show arrow button
+  if (!isOpen) {
+    return (
+      <button
+        onClick={onToggle}
+        className="w-12 bg-mocha-mantle dark:bg-mocha-mantle light:bg-latte-mantle border-l border-mocha-surface0 dark:border-mocha-surface0 light:border-latte-surface0 flex items-center justify-center hover:bg-mocha-surface0 dark:hover:bg-mocha-surface0 light:hover:bg-latte-surface0 transition-colors"
+        title="Open sidebar"
+      >
+        <span className="text-xl text-mocha-text dark:text-mocha-text light:text-latte-text">←</span>
+      </button>
+    );
+  }
 
   return (
     <>
@@ -149,9 +160,9 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
         />
       )}
 
-      <div className="w-96 bg-mocha-mantle dark:bg-mocha-mantle light:bg-latte-mantle border-l border-mocha-surface0 dark:border-mocha-surface0 light:border-latte-surface0 flex flex-col">
-        {/* Tab Header */}
-        <div className="border-b border-mocha-surface0 dark:border-mocha-surface0 light:border-latte-surface0">
+      <div className="w-96 bg-mocha-mantle dark:bg-mocha-mantle light:bg-latte-mantle border-l border-mocha-surface0 dark:border-mocha-surface0 light:border-latte-surface0 flex flex-col h-full">
+        {/* Tab Header - Fixed */}
+        <div className="flex-shrink-0 border-b border-mocha-surface0 dark:border-mocha-surface0 light:border-latte-surface0">
           <div className="flex">
             <button
               onClick={() => onViewChange('refinement')}
@@ -171,7 +182,7 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
                   : 'text-mocha-subtext0 dark:text-mocha-subtext0 light:text-latte-subtext0 hover:text-mocha-text dark:hover:text-mocha-text light:hover:text-latte-text hover:bg-mocha-surface0 dark:hover:bg-mocha-surface0 light:hover:bg-latte-surface0'
               }`}
             >
-              💬 Comments
+              💬 {comments.length > 0 && `(${comments.length})`}
             </button>
             <button
               onClick={() => onViewChange('history')}
@@ -181,7 +192,7 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
                   : 'text-mocha-subtext0 dark:text-mocha-subtext0 light:text-latte-subtext0 hover:text-mocha-text dark:hover:text-mocha-text light:hover:text-latte-text hover:bg-mocha-surface0 dark:hover:bg-mocha-surface0 light:hover:bg-latte-surface0'
               }`}
             >
-              📜 History {refinementHistory.length > 0 && `(${refinementHistory.length})`}
+              📜 {refinementHistory.length > 0 && `(${refinementHistory.length})`}
             </button>
             <button
               onClick={onToggle}
@@ -193,16 +204,16 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
           </div>
         </div>
 
-        {/* Error Message */}
+        {/* Error Message - Fixed */}
         {error && (
-          <div className="m-4 p-3 bg-mocha-red/10 border border-mocha-red/30 text-mocha-red dark:bg-mocha-red/10 dark:border-mocha-red/30 dark:text-mocha-red light:bg-latte-red/10 light:border-latte-red/30 light:text-latte-red rounded-lg text-sm flex justify-between items-center">
+          <div className="flex-shrink-0 m-4 p-3 bg-mocha-red/10 border border-mocha-red/30 text-mocha-red dark:bg-mocha-red/10 dark:border-mocha-red/30 dark:text-mocha-red light:bg-latte-red/10 light:border-latte-red/30 light:text-latte-red rounded-lg text-sm flex justify-between items-center">
             <span>{error}</span>
             <button onClick={() => setError('')} className="font-bold">✕</button>
           </div>
         )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
           {view === 'refinement' ? (
             <RefinementPanel
               isOpen={true}
@@ -213,7 +224,7 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
               isRefining={isRefining}
             />
           ) : view === 'comments' ? (
-            <div className="h-full overflow-y-auto p-4">
+            <div className="p-4">
               <h3 className="text-lg font-semibold text-mocha-text dark:text-mocha-text light:text-latte-text mb-4 flex items-center">
                 <span className="text-2xl mr-2">💬</span>
                 All Comments
@@ -264,7 +275,7 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
               )}
             </div>
           ) : (
-            <div className="h-full overflow-y-auto p-4">
+            <div className="p-4">
               <h3 className="text-lg font-semibold text-mocha-text dark:text-mocha-text light:text-latte-text mb-4 flex items-center">
                 <span className="text-2xl mr-2">📜</span>
                 Refinement History
