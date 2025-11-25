@@ -46,7 +46,7 @@ const Editor = ({ project, onUpdate }) => {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-theme(spacing.32))]">
+    <div className="flex h-[calc(99dvh-theme(spacing.36))]">
       {/* Left Sidebar */}
       <EditorSidebar
         isOpen={isLeftSidebarOpen}
