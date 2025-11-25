@@ -29,12 +29,6 @@ const RefinementPanel = ({
               AI Refinement
             </h3>
           </div>
-          <button
-            onClick={onToggle}
-            className="p-1 text-mocha-overlay0 dark:text-mocha-overlay0 light:text-latte-overlay0 hover:text-mocha-text dark:hover:text-mocha-text light:hover:text-latte-text transition-colors"
-          >
-            <span className="text-xl">✕</span>
-          </button>
         </div>
       </div>
 
