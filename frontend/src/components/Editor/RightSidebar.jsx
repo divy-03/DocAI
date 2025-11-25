@@ -15,9 +15,16 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
   const [refinementHistory, setRefinementHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Comments
+  const [comments, setComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+
   useEffect(() => {
     if (isOpen && view === 'history' && section) {
       loadRefinementHistory();
+    }
+    if (isOpen && view === 'comments' && section) {
+      loadComments();
     }
   }, [isOpen, view, section?.id]);
 
@@ -32,6 +39,22 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
       console.error('Failed to load refinement history:', err);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  const loadComments = async () => {
+    if (!section) return;
+    
+    setLoadingComments(true);
+    try {
+      const feedbacks = await refinementApi.getFeedback(section.id);
+      const commentsOnly = feedbacks.filter(f => f.comment && f.comment.trim() !== '');
+      setComments(commentsOnly);
+    } catch (err) {
+      console.error('Failed to load comments:', err);
+      setComments([]);
+    } finally {
+      setLoadingComments(false);
     }
   };
 
@@ -141,6 +164,16 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
               ✨ Refine
             </button>
             <button
+              onClick={() => onViewChange('comments')}
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                view === 'comments'
+                  ? 'text-mocha-mauve dark:text-mocha-mauve light:text-latte-mauve border-b-2 border-mocha-mauve dark:border-mocha-mauve light:border-latte-mauve bg-mocha-mauve/5 dark:bg-mocha-mauve/5 light:bg-latte-mauve/5'
+                  : 'text-mocha-subtext0 dark:text-mocha-subtext0 light:text-latte-subtext0 hover:text-mocha-text dark:hover:text-mocha-text light:hover:text-latte-text hover:bg-mocha-surface0 dark:hover:bg-mocha-surface0 light:hover:bg-latte-surface0'
+              }`}
+            >
+              💬 Comments
+            </button>
+            <button
               onClick={() => onViewChange('history')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
                 view === 'history'
@@ -179,6 +212,57 @@ const RightSidebar = ({ isOpen, onToggle, view, onViewChange, section, onRefine,
               onRefine={handleRefinePreview}
               isRefining={isRefining}
             />
+          ) : view === 'comments' ? (
+            <div className="h-full overflow-y-auto p-4">
+              <h3 className="text-lg font-semibold text-mocha-text dark:text-mocha-text light:text-latte-text mb-4 flex items-center">
+                <span className="text-2xl mr-2">💬</span>
+                All Comments
+              </h3>
+              
+              {loadingComments ? (
+                <div className="flex justify-center py-8">
+                  <div className="spinner"></div>
+                </div>
+              ) : comments.length > 0 ? (
+                <div className="space-y-3">
+                  {comments.map((comment, index) => (
+                    <div
+                      key={comment.id}
+                      className="p-4 bg-mocha-surface0 dark:bg-mocha-surface0 light:bg-latte-surface0 rounded-lg border border-mocha-surface1 dark:border-mocha-surface1 light:border-latte-surface1 hover:border-mocha-blue/30 dark:hover:border-mocha-blue/30 light:hover:border-latte-blue/30 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-semibold text-mocha-blue dark:text-mocha-blue light:text-latte-blue">
+                            Comment #{comments.length - index}
+                          </span>
+                          {comment.feedback_type && (
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                              comment.feedback_type === 'like'
+                                ? 'bg-mocha-green/20 dark:bg-mocha-green/20 light:bg-latte-green/20 text-mocha-green dark:text-mocha-green light:text-latte-green'
+                                : 'bg-mocha-red/20 dark:bg-mocha-red/20 light:bg-latte-red/20 text-mocha-red dark:text-mocha-red light:text-latte-red'
+                            }`}>
+                              {comment.feedback_type === 'like' ? '👍 Like' : '👎 Dislike'}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-mocha-overlay0 dark:text-mocha-overlay0 light:text-latte-overlay0">
+                          {new Date(comment.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-mocha-text dark:text-mocha-text light:text-latte-text leading-relaxed whitespace-pre-wrap">
+                        {comment.comment}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-mocha-overlay0 dark:text-mocha-overlay0 light:text-latte-overlay0">
+                  <div className="text-5xl mb-3">💭</div>
+                  <p>No comments yet</p>
+                  <p className="text-sm mt-1">Add a comment to share your thoughts</p>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="h-full overflow-y-auto p-4">
               <h3 className="text-lg font-semibold text-mocha-text dark:text-mocha-text light:text-latte-text mb-4 flex items-center">
@@ -345,3 +429,4 @@ const RefinementPreview = ({ preview, onAccept, onReject, isSaving }) => {
 };
 
 export default RightSidebar;
+

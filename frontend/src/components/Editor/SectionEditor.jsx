@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { refinementApi } from '../../api/refinement';
 import { sectionsApi } from '../../api/sections';
 
-const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUpdate, onOpenRefinement, onOpenHistory }) => {
+const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUpdate, onOpenRefinement, onOpenHistory, onOpenComments }) => {
   // Editing states
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingContent, setIsEditingContent] = useState(false);
@@ -48,18 +48,21 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
   const loadFeedback = async () => {
     try {
       const feedbacks = await refinementApi.getFeedback(section.id);
-      if (feedbacks.length > 0) {
-        const latest = feedbacks[0];
-        setFeedbackType(latest.feedback_type);
-        setComment(latest.comment || '');
+      console.log(feedbacks);
+      
+      // Count total comments
+      const totalComments = feedbacks.filter(f => f.comment && f.comment.trim() !== '').length;
+      
+      // Find latest feedback with type
+      const latestWithType = feedbacks.find(f => f.feedback_type);
+      if (latestWithType) {
+        setFeedbackType(latestWithType.feedback_type);
       } else {
         setFeedbackType(null);
-        setComment('');
       }
     } catch (err) {
       console.error('Failed to load feedback:', err);
       setFeedbackType(null);
-      setComment('');
     }
   };
 
@@ -136,6 +139,8 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
     try {
       await onFeedback(section.id, feedbackType, comment);
       setShowCommentBox(false);
+      setComment('');
+      await loadFeedback();
     } catch (err) {
       setError('Failed to save comment');
     } finally {
@@ -368,3 +373,4 @@ const SectionEditor = ({ section, documentType, onRefine, onFeedback, onManualUp
 };
 
 export default SectionEditor;
+
