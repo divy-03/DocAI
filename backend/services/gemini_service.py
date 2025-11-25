@@ -158,15 +158,33 @@ Write in plain text format ready for direct insertion into a document.
         
         return text.strip()
     
+    def _truncate_title(self, title: str, max_length: int = 36) -> str:
+        """
+        Truncate title to max length, keeping it meaningful
+        
+        Args:
+            title: The title to truncate
+            max_length: Maximum number of characters (default 36)
+            
+        Returns:
+            Truncated title
+        """
+        if len(title) <= max_length:
+            return title
+        
+        # Truncate and add ellipsis
+        truncated = title[:max_length - 3].rstrip()
+        return truncated + "..."
+    
     def parse_outline(self, text: str) -> List[str]:
         """
-        Parse AI-generated outline text into a list of section titles
+        Parse AI-generated outline text into a list of section titles (max 36 chars each)
         
         Args:
             text: Raw text from AI containing numbered or bulleted list
             
         Returns:
-            List of clean section titles
+            List of clean section titles (max 36 characters each)
         """
         lines = text.strip().split('\n')
         titles = []
@@ -190,6 +208,8 @@ Write in plain text format ready for direct insertion into a document.
             
             # Only add non-empty titles
             if cleaned:
+                # Truncate to max 36 characters
+                cleaned = self._truncate_title(cleaned, max_length=36)
                 titles.append(cleaned)
         
         return titles
@@ -209,7 +229,7 @@ Write in plain text format ready for direct insertion into a document.
             section_count: Number of sections/slides to generate
             
         Returns:
-            List of section/slide titles
+            List of section/slide titles (max 36 characters each)
         """
         try:
             if document_type == "pptx":
@@ -218,10 +238,17 @@ Generate a professional presentation outline for: {topic}
 
 Requirements:
 - Create exactly {section_count} slide titles
-- Make titles concise and clear (5-8 words each)
+- Make each title CONCISE and BRIEF (maximum 36 characters including spaces)
+- Titles should be clear, professional, and engaging
 - Structure: Start with Introduction, cover main points, end with Conclusion
 - Ensure logical flow between slides
-- Use professional, engaging language
+- Use professional language
+
+CRITICAL: Keep each title SHORT - no more than 36 characters. Examples:
+✓ "Market Growth Drivers"
+✓ "Key Statistics & Trends"
+✓ "Future Outlook"
+✗ "A comprehensive analysis of all market growth drivers and their impact on business" (TOO LONG)
 
 Format: Return ONLY the slide titles as a numbered list.
 
@@ -230,7 +257,7 @@ Example format:
 2. [Title]
 3. [Title]
 
-Generate {section_count} slide titles now. Output ONLY the numbered list, nothing else:
+Generate {section_count} slide titles now. Output ONLY the numbered list, nothing else. Remember: MAX 36 characters per title:
 """
             else:  # docx
                 prompt = f"""
@@ -238,10 +265,17 @@ Generate a comprehensive document outline for: {topic}
 
 Requirements:
 - Create exactly {section_count} section titles
-- Make titles descriptive and professional
+- Make each title CONCISE and BRIEF (maximum 36 characters including spaces)
+- Titles should be descriptive and professional
 - Structure: Introduction, main content sections, conclusion
 - Follow academic/professional writing standards
 - Ensure comprehensive coverage of the topic
+
+CRITICAL: Keep each title SHORT - no more than 36 characters. Examples:
+✓ "Market Analysis Overview"
+✓ "Technology & Innovation"
+✓ "Strategic Recommendations"
+✗ "A detailed and comprehensive analysis of all the technological innovations and their implications" (TOO LONG)
 
 Format: Return ONLY the section titles as a numbered list.
 
@@ -250,7 +284,7 @@ Example format:
 2. [Title]
 3. [Title]
 
-Generate {section_count} section titles now. Output ONLY the numbered list, nothing else:
+Generate {section_count} section titles now. Output ONLY the numbered list, nothing else. Remember: MAX 36 characters per title:
 """
 
             loop = asyncio.get_event_loop()
@@ -265,7 +299,7 @@ Generate {section_count} section titles now. Output ONLY the numbered list, noth
             # Return exactly section_count titles (or pad if fewer)
             if len(titles) < section_count:
                 for i in range(len(titles), section_count):
-                    titles.append(f"Additional Section {i + 1}")
+                    titles.append(f"Section {i + 1}")
             
             return titles[:section_count]
             
