@@ -2,6 +2,7 @@ import google.generativeai as genai
 from typing import Optional, List
 import asyncio
 from config import get_settings
+import re
 
 settings = get_settings()
 
@@ -30,7 +31,7 @@ class GeminiService:
             word_count: Target word count for the content
             
         Returns:
-            Generated content as string
+            Generated content as string (clean, no markdown)
         """
         try:
             if document_type == "pptx":
@@ -43,12 +44,20 @@ Slide Title: {section_title}
 
 Generate clear, bullet-point style content for this slide:
 - Use 3-5 bullet points maximum
-- Keep each point concise (1-2 sentences)
+- Keep each point concise (1-2 sentences max)
 - Focus on key insights and takeaways
 - Use professional but engaging language
 - Ensure content flows logically from previous slides
 
-Generate only the content, no additional formatting or explanations.
+IMPORTANT: Return ONLY the bullet points, one per line, without any markdown symbols (*, -, •, etc.), numbering, or formatting.
+Do not include the slide title.
+Each bullet point should start fresh on a new line.
+
+Example output format:
+First key point about the topic
+Second important insight or detail
+Third main takeaway
+Fourth supporting information
 """
             else:  # docx
                 prompt = f"""
@@ -66,7 +75,10 @@ Generate detailed, professional content for this section:
 - Maintain consistent tone throughout
 - Structure content with proper paragraphs
 
-Generate only the content, no section title or additional formatting.
+IMPORTANT: Return ONLY clean paragraph text without any markdown formatting (no *, #, **, etc.).
+Do not include the section title.
+Use natural paragraph breaks (blank line between paragraphs).
+Write in plain text format ready for direct insertion into a document.
 """
 
             loop = asyncio.get_event_loop()
@@ -75,10 +87,76 @@ Generate only the content, no section title or additional formatting.
                 lambda: self.model.generate_content(prompt)
             )
             
-            return response.text.strip()
+            content = response.text.strip()
+            
+            # Clean up any remaining markdown artifacts
+            if document_type == "pptx":
+                content = self._clean_bullet_content(content)
+            else:
+                content = self._clean_paragraph_content(content)
+            
+            return content
             
         except Exception as e:
             raise Exception(f"Error generating content with Gemini: {str(e)}")
+    
+    def _clean_bullet_content(self, text: str) -> str:
+        """
+        Clean bullet point content by removing markdown symbols
+        """
+        lines = text.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Remove leading markdown bullets
+            if line.startswith('*'):
+                line = line.lstrip('*').strip()
+            elif line.startswith('-'):
+                line = line.lstrip('-').strip()
+            elif line.startswith('•'):
+                line = line.lstrip('•').strip()
+            elif line.startswith('→'):
+                line = line.lstrip('→').strip()
+            elif line.startswith('►'):
+                line = line.lstrip('►').strip()
+            
+            # Remove numbering: "1.", "1)", etc.
+            if line and line[0].isdigit():
+                match = re.match(r'^[\d]+[\.\)\-\s]+', line)
+                if match:
+                    line = line[match.end():].strip()
+            
+            if line:
+                cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines)
+    
+    def _clean_paragraph_content(self, text: str) -> str:
+        """
+        Clean paragraph content by removing markdown formatting
+        """
+        # Remove markdown bold/italic
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+        text = re.sub(r'\*(.+?)\*', r'\1', text)
+        text = re.sub(r'__(.+?)__', r'\1', text)
+        text = re.sub(r'_(.+?)_', r'\1', text)
+        text = re.sub(r'~~(.+?)~~', r'\1', text)
+        
+        # Remove markdown headings
+        text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)
+        
+        # Remove markdown lists (convert to text)
+        text = re.sub(r'^\s*[-*•]\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+        
+        # Clean up excessive whitespace
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        
+        return text.strip()
     
     def parse_outline(self, text: str) -> List[str]:
         """
@@ -99,18 +177,15 @@ Generate only the content, no section title or additional formatting.
                 continue
                 
             # Remove common numbering patterns
-            # Handles: "1.", "1)", "1 -", "•", "-", "*"
             cleaned = line
             
             # Remove numbering: "1.", "1)", etc.
             if line and line[0].isdigit():
-                # Find where the number ends
-                i = 0
-                while i < len(line) and (line[i].isdigit() or line[i] in '.-)'):
-                    i += 1
-                cleaned = line[i:].strip()
+                match = re.match(r'^[\d]+[\.\)\-\s]+', line)
+                if match:
+                    cleaned = line[match.end():].strip()
             # Remove bullet points: "•", "-", "*"
-            elif line[0] in ['•', '-', '*', '→', '►']:
+            elif line and line[0] in ['•', '-', '*', '→', '►']:
                 cleaned = line[1:].strip()
             
             # Only add non-empty titles
@@ -154,10 +229,8 @@ Example format:
 1. [Title]
 2. [Title]
 3. [Title]
-...
-{section_count}. [Title]
 
-Generate {section_count} slide titles now:
+Generate {section_count} slide titles now. Output ONLY the numbered list, nothing else:
 """
             else:  # docx
                 prompt = f"""
@@ -176,10 +249,8 @@ Example format:
 1. [Title]
 2. [Title]
 3. [Title]
-...
-{section_count}. [Title]
 
-Generate {section_count} section titles now:
+Generate {section_count} section titles now. Output ONLY the numbered list, nothing else:
 """
 
             loop = asyncio.get_event_loop()
@@ -193,7 +264,6 @@ Generate {section_count} section titles now:
             
             # Return exactly section_count titles (or pad if fewer)
             if len(titles) < section_count:
-                # If we got fewer titles, pad with generic ones
                 for i in range(len(titles), section_count):
                     titles.append(f"Additional Section {i + 1}")
             
