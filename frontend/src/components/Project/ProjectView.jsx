@@ -54,10 +54,12 @@ const ProjectView = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-mocha-base dark:bg-mocha-base light:bg-latte-base flex items-center justify-center">
         <div className="text-center">
           <div className="spinner mb-4"></div>
-          <p className="text-gray-600">Loading project...</p>
+          <p className="text-mocha-subtext0 dark:text-mocha-subtext0 light:text-latte-subtext0">
+            Loading project...
+          </p>
         </div>
       </div>
     );
@@ -65,13 +67,15 @@ const ProjectView = () => {
 
   if (!currentProject) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-mocha-base dark:bg-mocha-base light:bg-latte-base flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">📭</div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Project not found</h3>
+          <h3 className="text-xl font-semibold text-mocha-text dark:text-mocha-text light:text-latte-text mb-4">
+            Project not found
+          </h3>
           <button
             onClick={() => navigate('/dashboard')}
-            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200"
+            className="px-6 py-3 bg-mocha-mauve dark:bg-mocha-mauve light:bg-latte-mauve text-mocha-crust dark:text-mocha-crust light:text-latte-base rounded-lg hover:bg-mocha-lavender dark:hover:bg-mocha-lavender light:hover:bg-latte-lavender font-semibold transition duration-200"
           >
             Back to Dashboard
           </button>
@@ -81,14 +85,14 @@ const ProjectView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-mocha-base dark:bg-mocha-base light:bg-latte-base flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
+      <div className="bg-mocha-mantle dark:bg-mocha-mantle light:bg-latte-mantle border-b border-mocha-surface0 dark:border-mocha-surface0 light:border-latte-surface0 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={() => navigate('/dashboard')}
-              className="flex items-center text-gray-600 hover:text-gray-900 transition duration-200"
+              className="flex items-center text-mocha-subtext0 dark:text-mocha-subtext0 light:text-latte-subtext0 hover:text-mocha-text dark:hover:text-mocha-text light:hover:text-latte-text transition duration-200"
             >
               <span className="mr-2">←</span>
               <span className="font-medium">Back to Dashboard</span>
@@ -98,7 +102,7 @@ const ProjectView = () => {
               <button
                 onClick={handleGenerateContent}
                 disabled={generating}
-                className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                className="flex items-center space-x-2 px-6 py-3 bg-mocha-mauve dark:bg-mocha-mauve light:bg-latte-mauve text-mocha-crust dark:text-mocha-crust light:text-latte-base rounded-lg hover:bg-mocha-lavender dark:hover:bg-mocha-lavender light:hover:bg-latte-lavender font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
               >
                 {generating ? (
                   <>
@@ -117,11 +121,11 @@ const ProjectView = () => {
                 <button
                   onClick={handleExport}
                   disabled={exporting}
-                  className="flex items-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                  className="flex items-center space-x-2 px-6 py-3 bg-mocha-green dark:bg-mocha-green light:bg-latte-green text-mocha-crust dark:text-mocha-crust light:text-latte-base rounded-lg hover:bg-mocha-teal dark:hover:bg-mocha-teal light:hover:bg-latte-teal font-semibold transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
                 >
                   {exporting ? (
                     <>
-                      <div className="spinner w-5 h-5 border-2 border-white"></div>
+                      <div className="spinner w-5 h-5 border-2 border-mocha-crust dark:border-mocha-crust light:border-latte-base"></div>
                       <span>Exporting...</span>
                     </>
                   ) : (
@@ -131,7 +135,7 @@ const ProjectView = () => {
                     </>
                   )}
                 </button>
-                <div className="flex items-center space-x-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                <div className="flex items-center space-x-2 px-4 py-2 bg-mocha-green/10 dark:bg-mocha-green/10 light:bg-latte-green/10 text-mocha-green dark:text-mocha-green light:text-latte-green rounded-lg border border-mocha-green/30 dark:border-mocha-green/30 light:border-latte-green/30">
                   <span>✓</span>
                   <span className="font-medium text-sm">Ready to Export</span>
                 </div>
@@ -141,10 +145,14 @@ const ProjectView = () => {
 
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{currentProject.title}</h1>
-              <p className="mt-1 text-sm text-gray-600">{currentProject.topic}</p>
+              <h1 className="text-2xl font-bold text-mocha-text dark:text-mocha-text light:text-latte-text">
+                {currentProject.title}
+              </h1>
+              <p className="mt-1 text-sm text-mocha-subtext0 dark:text-mocha-subtext0 light:text-latte-subtext0">
+                {currentProject.topic}
+              </p>
             </div>
-            <span className="px-4 py-2 text-sm font-semibold text-primary-700 bg-primary-50 rounded-full">
+            <span className="px-4 py-2 text-sm font-semibold text-mocha-mauve dark:text-mocha-mauve light:text-latte-mauve bg-mocha-mauve/10 dark:bg-mocha-mauve/10 light:bg-latte-mauve/10 rounded-full">
               {currentProject.document_type.toUpperCase()}
             </span>
           </div>
@@ -154,9 +162,14 @@ const ProjectView = () => {
       {/* Error Message */}
       {error && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex justify-between items-center">
+          <div className="bg-mocha-red/10 border border-mocha-red/30 text-mocha-red dark:bg-mocha-red/10 dark:border-mocha-red/30 dark:text-mocha-red light:bg-latte-red/10 light:border-latte-red/30 light:text-latte-red px-4 py-3 rounded-lg flex justify-between items-center">
             <span>{error}</span>
-            <button onClick={() => setError('')} className="text-red-900 font-bold">✕</button>
+            <button 
+              onClick={() => setError('')} 
+              className="text-mocha-text dark:text-mocha-text light:text-latte-text font-bold"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
@@ -165,15 +178,17 @@ const ProjectView = () => {
       <div className="flex-1">
         {!hasContent && !generating ? (
           <div className="flex items-center justify-center h-full p-8">
-            <div className="bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300 p-12 text-center max-w-2xl">
+            <div className="bg-mocha-mantle dark:bg-mocha-mantle light:bg-latte-mantle rounded-xl shadow-sm border-2 border-dashed border-mocha-surface1 dark:border-mocha-surface1 light:border-latte-surface1 p-12 text-center max-w-2xl">
               <div className="text-6xl mb-6">🚀</div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Ready to Generate Content</h3>
-              <p className="text-gray-600 mb-8">
+              <h3 className="text-2xl font-bold text-mocha-text dark:text-mocha-text light:text-latte-text mb-3">
+                Ready to Generate Content
+              </h3>
+              <p className="text-mocha-subtext0 dark:text-mocha-subtext0 light:text-latte-subtext0 mb-8">
                 Click "Generate Content" to use AI to create professional content for all {currentProject.sections.length} {currentProject.document_type === 'docx' ? 'sections' : 'slides'}
               </p>
               <button
                 onClick={handleGenerateContent}
-                className="inline-flex items-center space-x-2 px-8 py-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-semibold transition duration-200 text-lg"
+                className="inline-flex items-center space-x-2 px-8 py-4 bg-mocha-mauve dark:bg-mocha-mauve light:bg-latte-mauve text-mocha-crust dark:text-mocha-crust light:text-latte-base rounded-lg hover:bg-mocha-lavender dark:hover:bg-mocha-lavender light:hover:bg-latte-lavender font-semibold transition duration-200 text-lg"
               >
                 <span>✨</span>
                 <span>Generate Content</span>
@@ -192,4 +207,3 @@ const ProjectView = () => {
 };
 
 export default ProjectView;
-
