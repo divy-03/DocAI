@@ -9,6 +9,7 @@ const Editor = ({ project, onUpdate }) => {
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [rightSidebarView, setRightSidebarView] = useState('refinement');
+  const [feedback, setFeedback] = useState({}); // Track feedback locally
 
   const selectedSection = project?.sections?.[selectedSectionIndex];
 
@@ -18,16 +19,26 @@ const Editor = ({ project, onUpdate }) => {
 
   const handleFeedback = async (sectionId, feedbackType, comment = '') => {
     try {
-      await refinementApi.submitFeedback(sectionId, feedbackType, comment);
-      if (onUpdate) onUpdate();
+      await refinementApi.addFeedback(sectionId, feedbackType, comment);
+      setFeedback(prev => ({
+        ...prev,
+        [sectionId]: { type: feedbackType, comment, timestamp: new Date() }
+      }));
     } catch (err) {
       console.error('Failed to submit feedback:', err);
       throw err;
     }
   };
 
-  const handleManualUpdate = (sectionId, updates) => {
-    if (onUpdate) onUpdate();
+  const handleManualUpdate = async (sectionId, updates) => {
+    try {
+      if (onUpdate) {
+        await onUpdate();
+      }
+    } catch (err) {
+      console.error('Failed to update section:', err);
+      throw err;
+    }
   };
 
   const handleOpenRefinement = () => {
@@ -68,6 +79,7 @@ const Editor = ({ project, onUpdate }) => {
             onOpenRefinement={handleOpenRefinement}
             onOpenHistory={handleOpenHistory}
             onOpenComments={handleOpenComments}
+            sectionFeedback={feedback[selectedSection.id]}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
