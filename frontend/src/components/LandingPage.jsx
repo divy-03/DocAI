@@ -218,12 +218,6 @@ const LandingPage = () => {
                 <span>Start Creating Free</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
-              <button
-                onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}
-                className="px-8 py-4 bg-mocha-surface0 dark:bg-mocha-surface0 light:bg-latte-surface0 text-mocha-text dark:text-mocha-text light:text-latte-text rounded-xl hover:bg-mocha-surface1 dark:hover:bg-mocha-surface1 light:hover:bg-latte-surface1 transition-all duration-300 font-semibold text-lg border border-mocha-surface2 dark:border-mocha-surface2 light:border-latte-surface2"
-              >
-                Watch Demo
-              </button>
             </div>
 
             {/* Stats */}
