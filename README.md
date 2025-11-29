@@ -9,7 +9,7 @@ DocAI is a modern, full-stack web application designed to streamline the documen
 - **Rich Text Editor:** A fully-featured editor to modify and format your document sections.
 - **Iterative Refinement:** Refine and improve generated content with AI-powered suggestions and tools.
 - **User Authentication:** Secure user registration and login system.
-- **Multi-Format Export:** Export your final documents and download as .docx
+- **Export Document:** Export your final documents and download as .docx
 
 ## Tech Stack
 
@@ -41,7 +41,7 @@ DocAI is a modern, full-stack web application designed to streamline the documen
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/divy-03/DocAI
     cd DocAI
     ```
 
